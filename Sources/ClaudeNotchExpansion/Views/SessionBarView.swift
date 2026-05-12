@@ -9,7 +9,7 @@ struct SessionBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left of camera housing: session count + status dot
+            // Left of camera: session count + amber status dot
             HStack(spacing: 5) {
                 Circle()
                     .fill(Color.claudeAmber)
@@ -23,13 +23,14 @@ struct SessionBarView: View {
 
             Spacer()
 
-            // Right of camera housing: Claude icon — tap to open session detail
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(appState.isDetailOpen ? Color.white : Color.claudePurple)
-                .padding(.trailing, 14)
+            // Right of camera: expand/collapse chevron
+            Image(systemName: appState.isDetailOpen ? "chevron.up" : "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(appState.isDetailOpen ? Color.white.opacity(0.9) : Color.white.opacity(0.55))
+                .frame(width: 20, height: 20)
                 .contentShape(Rectangle().inset(by: -8))
                 .onTapGesture { appState.toggleDetail() }
+                .padding(.trailing, 14)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(

@@ -34,17 +34,19 @@ struct NotchContentView: View {
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-        case .horizontalBar:
-            SessionBarView()
-                .transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity))
-
-        case .horizontalBarWithDetail:
+        // Both bar states use the SAME SwiftUI view tree so the bar itself
+        // never re-transitions — only the detail panel slides in/out.
+        case .horizontalBar, .horizontalBarWithDetail:
             VStack(spacing: 0) {
                 SessionBarView()
                     .frame(height: notchHeight)
-                DetailPanelView()
+                if appState.isDetailOpen {
+                    DetailPanelView()
+                        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+                }
             }
-            .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
+            .animation(.easeOut(duration: 0.22), value: appState.isDetailOpen)
+            .transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity))
 
         case .permissionCard(let permission):
             PermissionCardView(permission: permission)

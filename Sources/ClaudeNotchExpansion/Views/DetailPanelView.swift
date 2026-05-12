@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct DetailPanelView: View {
@@ -9,19 +10,19 @@ struct DetailPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(activeSessions.enumerated()), id: \.element.id) { idx, session in
-                SessionRowView(session: session)
-                if idx < activeSessions.count - 1 {
-                    Divider().overlay(Color.white.opacity(0.07))
-                }
-            }
-
             if activeSessions.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.white.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 20)
+            } else {
+                ForEach(Array(activeSessions.enumerated()), id: \.element.id) { idx, session in
+                    SessionRowView(session: session)
+                    if idx < activeSessions.count - 1 {
+                        Divider().overlay(Color.white.opacity(0.07))
+                    }
+                }
             }
         }
         .padding(.vertical, 6)
@@ -37,8 +38,6 @@ struct DetailPanelView: View {
             .fill(Color.notchBG)
         )
         .padding(.horizontal, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { appState.closeDetail() }
     }
 }
 
@@ -46,13 +45,14 @@ private struct SessionRowView: View {
     let session: ClaudeSession
     @State private var elapsed: TimeInterval = 0
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    @State private var isHovered = false
 
     private var stateColor: Color {
         switch session.state {
-        case .active:                return .claudeAmber
-        case .waitingForPermission:  return .claudeAmber
-        case .idle:                  return Color.white.opacity(0.35)
-        case .finished:              return .claudeGreen
+        case .active:               return .claudeAmber
+        case .waitingForPermission: return .claudeAmber
+        case .idle:                 return Color.white.opacity(0.35)
+        case .finished:             return .claudeGreen
         }
     }
 
@@ -102,11 +102,45 @@ private struct SessionRowView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .onAppear {
-            elapsed = Date().timeIntervalSince(session.startedAt)
-        }
-        .onReceive(timer) { _ in
-            elapsed = Date().timeIntervalSince(session.startedAt)
+        .background(isHovered ? Color.white.opacity(0.06) : Color.clear)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture { focusSession(session) }
+        .onAppear { elapsed = Date().timeIntervalSince(session.startedAt) }
+        .onReceive(timer) { _ in elapsed = Date().timeIntervalSince(session.startedAt) }
+    }
+
+    private func focusSession(_ session: ClaudeSession) {
+        AppState.shared.closeDetail()
+
+        switch session.entrypoint {
+        case "claude-desktop":
+            // Activate the Claude Desktop app that owns this session
+            if let app = NSRunningApplication.runningApplications(
+                withBundleIdentifier: "com.anthropic.claudefordesktop"
+            ).first {
+                app.activate()
+            }
+
+        case "claude-vscode":
+            // Find a running VS Code / Cursor instance and activate it.
+            // We use the session PID's parent to find the right app process.
+            let editorBundleIds = [
+                "com.microsoft.VSCode",
+                "com.todesktop.230313mzl4w4u92",   // Cursor
+                "com.vscodium.codium",
+                "com.microsoft.VSCodeInsiders",
+            ]
+            if let app = editorBundleIds.compactMap({
+                NSRunningApplication.runningApplications(withBundleIdentifier: $0).first
+            }).first {
+                app.activate()
+            } else {
+                NSWorkspace.shared.open(URL(fileURLWithPath: session.cwd))
+            }
+
+        default:
+            NSWorkspace.shared.open(URL(fileURLWithPath: session.cwd))
         }
     }
 }

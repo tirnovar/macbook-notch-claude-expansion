@@ -5,19 +5,17 @@ final class NotchWindowController: NSObject {
     private var window: NSWindow!
 
     private let notchW: CGFloat      = 198
-    private let barW: CGFloat        = 300
-    private let detailW: CGFloat     = 360
+    private let barW: CGFloat        = 360  // unified width for bar AND detail panel
     private let detailBelowH: CGFloat = 260
     private let cardW: CGFloat       = 460
     private let cardBelowH: CGFloat  = 224
+
+    private var globalClickMonitor: Any?
 
     private var screen: NSScreen {
         NSScreen.screens.first { $0.auxiliaryTopLeftArea != nil } ?? NSScreen.main ?? NSScreen.screens[0]
     }
 
-    // visibleFrame.maxY is the bottom of the menu-bar/notch region — reliable on all Dock positions.
-    // frame.maxY is the physical screen top edge.
-    // Their difference is the true hardware notch height.
     private var notchAreaY: CGFloat      { screen.visibleFrame.maxY }
     private var notchAreaHeight: CGFloat { screen.frame.maxY - screen.visibleFrame.maxY }
 
@@ -46,15 +44,22 @@ final class NotchWindowController: NSObject {
     @MainActor func transition(to state: NotchExpansionState) {
         switch state {
         case .collapsed:
+            stopOutsideClickMonitor()
             animate(to: notchFrame())
             window.ignoresMouseEvents = true
+
         case .horizontalBar:
+            stopOutsideClickMonitor()
             animate(to: barFrame())
-            window.ignoresMouseEvents = false  // wand icon is clickable
+            window.ignoresMouseEvents = false  // wand/chevron is clickable
+
         case .horizontalBarWithDetail:
             animate(to: barDetailFrame(), duration: 0.25)
             window.ignoresMouseEvents = false
+            startOutsideClickMonitor()
+
         case .permissionCard:
+            stopOutsideClickMonitor()
             animate(to: cardFrame(), duration: 0.25)
             window.ignoresMouseEvents = false
         }
@@ -74,10 +79,11 @@ final class NotchWindowController: NSObject {
 
     private func barDetailFrame() -> NSRect {
         let s = screen.frame
+        // Same x and width as barFrame — only y and height change (no horizontal jitter)
         return NSRect(
-            x: s.midX - detailW / 2,
+            x: s.midX - barW / 2,
             y: notchAreaY - detailBelowH,
-            width: detailW,
+            width: barW,
             height: notchAreaHeight + detailBelowH
         )
     }
@@ -93,6 +99,22 @@ final class NotchWindowController: NSObject {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
             ctx.allowsImplicitAnimation = true
             window.animator().setFrame(frame, display: true)
+        }
+    }
+
+    // MARK: - Outside-click monitor
+
+    private func startOutsideClickMonitor() {
+        guard globalClickMonitor == nil else { return }
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+            Task { @MainActor in AppState.shared.closeDetail() }
+        }
+    }
+
+    private func stopOutsideClickMonitor() {
+        if let monitor = globalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalClickMonitor = nil
         }
     }
 }
