@@ -20,7 +20,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.$notchExpansionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                self?.notchController?.transition(to: state)
+                Task { @MainActor [weak self] in
+                    self?.notchController?.transition(to: state)
+                }
             }
             .store(in: &cancellables)
     }

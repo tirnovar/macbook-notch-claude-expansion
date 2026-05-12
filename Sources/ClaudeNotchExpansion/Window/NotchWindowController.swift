@@ -25,7 +25,8 @@ final class NotchWindowController: NSObject {
             backing: .buffered,
             defer: false
         )
-        window.level = NSWindow.Level(Int(CGWindowLevelForKey(.floatingWindow)) + 1)
+        // Must be above the menu bar (mainMenu = 24, statusBar = 25) to receive clicks in the notch area
+        window.level = NSWindow.Level(rawValue: Int(NSWindow.Level.statusBar.rawValue) + 1)
         window.backgroundColor = .clear
         window.isOpaque = false
         window.hasShadow = false
@@ -39,7 +40,7 @@ final class NotchWindowController: NSObject {
         window.orderFrontRegardless()
     }
 
-    func transition(to state: NotchExpansionState) {
+    @MainActor func transition(to state: NotchExpansionState) {
         switch state {
         case .collapsed:
             animate(to: notchFrame())
@@ -56,32 +57,17 @@ final class NotchWindowController: NSObject {
 
     private func notchFrame() -> NSRect {
         let s = screen.frame
-        return NSRect(
-            x: (s.width - notchW) / 2,
-            y: s.height - notchH,
-            width: notchW,
-            height: notchH
-        )
+        return NSRect(x: s.midX - notchW / 2, y: s.maxY - notchH, width: notchW, height: notchH)
     }
 
     private func barFrame() -> NSRect {
         let s = screen.frame
-        return NSRect(
-            x: (s.width - barW) / 2,
-            y: s.height - notchH,
-            width: barW,
-            height: notchH
-        )
+        return NSRect(x: s.midX - barW / 2, y: s.maxY - notchH, width: barW, height: notchH)
     }
 
     private func cardFrame() -> NSRect {
         let s = screen.frame
-        return NSRect(
-            x: (s.width - cardW) / 2,
-            y: s.height - cardH,
-            width: cardW,
-            height: cardH
-        )
+        return NSRect(x: s.midX - cardW / 2, y: s.maxY - cardH, width: cardW, height: cardH)
     }
 
     private func animate(to frame: NSRect, duration: TimeInterval = 0.28) {

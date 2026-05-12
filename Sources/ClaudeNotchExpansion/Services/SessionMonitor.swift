@@ -34,7 +34,7 @@ actor SessionMonitor {
             guard
                 let data = try? Data(contentsOf: url),
                 let file = try? JSONDecoder().decode(SessionFile.self, from: data),
-                isAlive(Int32(file.pid))
+                isAlive(Int32(file.pid), startedAt: Date(timeIntervalSince1970: file.startedAt / 1000))
             else { continue }
 
             let session = ClaudeSession(from: file)
@@ -114,7 +114,7 @@ actor SessionMonitor {
                 let data = try? Data(contentsOf: url),
                 let file = try? JSONDecoder().decode(SessionFile.self, from: data),
                 activeSessions[file.sessionId] == nil,
-                isAlive(Int32(file.pid))
+                isAlive(Int32(file.pid), startedAt: Date(timeIntervalSince1970: file.startedAt / 1000))
             else { continue }
 
             let session = ClaudeSession(from: file)
@@ -181,7 +181,17 @@ actor SessionMonitor {
         }
     }
 
-    private func isAlive(_ pid: Int32) -> Bool {
-        kill(pid, 0) == 0 || errno == EPERM
+    private func isAlive(_ pid: Int32, startedAt: Date? = nil) -> Bool {
+        guard kill(pid, 0) == 0 || errno == EPERM else { return false }
+        guard let expected = startedAt else { return true }
+
+        // Guard against PID reuse: compare kernel process start time with session file timestamp
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return true }
+
+        let procStartSec = Double(info.kp_proc.p_starttime.tv_sec)
+        return abs(procStartSec - expected.timeIntervalSince1970) < 60
     }
 }
