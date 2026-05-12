@@ -192,6 +192,9 @@ actor SessionMonitor {
         guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return true }
 
         let procStartSec = Double(info.kp_proc.p_starttime.tv_sec)
-        return abs(procStartSec - expected.timeIntervalSince1970) < 60
+        guard procStartSec > 0 else { return true }
+        // A reused PID has a start time AFTER the session file was written.
+        // Real sessions always start before or around when the file is created.
+        return procStartSec <= expected.timeIntervalSince1970 + 5
     }
 }
