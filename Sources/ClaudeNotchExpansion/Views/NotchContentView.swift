@@ -9,6 +9,21 @@ extension Color {
     static let notchBG         = Color(red: 0.055, green: 0.055, blue: 0.055, opacity: 0.97)
 }
 
+// MARK: - Environment key for the hardware notch height
+
+private struct NotchHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 37
+}
+
+extension EnvironmentValues {
+    var notchHeight: CGFloat {
+        get { self[NotchHeightKey.self] }
+        set { self[NotchHeightKey.self] = newValue }
+    }
+}
+
+// MARK: - Root view
+
 struct NotchContentView: View {
     @EnvironmentObject var appState: AppState
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct PermissionCardView: View {
     let permission: PendingPermission
     @EnvironmentObject var appState: AppState
+    @Environment(\.notchHeight) var notchHeight
     @State private var timeRemaining: Double = 90
 
     private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -13,7 +14,11 @@ struct PermissionCardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top notch-shaped pill header
+            // Transparent area over the hardware notch (camera housing)
+            Color.clear.frame(height: notchHeight)
+
+            VStack(spacing: 0) {
+            // Card content below the hardware notch
             HStack(spacing: 8) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 11, weight: .semibold))
@@ -120,12 +125,12 @@ struct PermissionCardView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
         }
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(Color.notchBG)
-        )
-        .padding(.horizontal, 4)
-        .padding(.top, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.notchBG)
+            )
+            .padding(.horizontal, 4)
+            } // end inner VStack
         .onReceive(timer) { _ in
             let elapsed = Date().timeIntervalSince(permission.receivedAt)
             timeRemaining = max(0, 90 - elapsed)
