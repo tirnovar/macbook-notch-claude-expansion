@@ -71,6 +71,14 @@ private struct SessionRowView: View {
         return "\(secs / 3600)h \((secs % 3600) / 60)m"
     }
 
+    private var entrypointIcon: String {
+        switch session.entrypoint {
+        case "claude-desktop": return "sparkles"
+        case "claude-vscode":  return "curlybraces"
+        default:               return "terminal"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Circle()
@@ -78,10 +86,15 @@ private struct SessionRowView: View {
                 .frame(width: 6, height: 6)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.displayName)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Image(systemName: entrypointIcon)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.45))
+                    Text(session.displayName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                }
                 Text(session.cwd)
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(0.38))

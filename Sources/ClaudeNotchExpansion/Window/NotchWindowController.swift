@@ -80,11 +80,11 @@ final class NotchWindowController: NSObject {
 
     private func barDetailFrame() -> NSRect {
         let s = screen.frame
-        // Same x and width as barFrame — only y and height change (no horizontal jitter)
+        // Same x and width as barFrame — only y and height change, no horizontal movement
         return NSRect(
-            x: s.midX - barW / 2,
+            x: s.midX - barNarrowW / 2,
             y: notchAreaY - detailBelowH,
-            width: barW,
+            width: barNarrowW,
             height: notchAreaHeight + detailBelowH
         )
     }
