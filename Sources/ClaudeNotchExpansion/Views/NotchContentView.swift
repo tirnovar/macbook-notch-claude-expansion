@@ -49,8 +49,11 @@ struct NotchContentView: View {
             .transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity))
 
         case .permissionCard(let permission):
-            PermissionCardView(permission: permission)
-                .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
+            VStack(spacing: 0) {
+                Color.clear.frame(height: notchHeight)
+                PermissionCardView(permission: permission)
+            }
+            .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
         }
     }
 }

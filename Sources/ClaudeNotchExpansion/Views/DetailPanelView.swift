@@ -24,6 +24,9 @@ struct DetailPanelView: View {
                     }
                 }
             }
+
+            Divider().overlay(Color.white.opacity(0.07))
+            LegendFooterView()
         }
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
@@ -154,6 +157,81 @@ private struct SessionRowView: View {
 
         default:
             NSWorkspace.shared.open(URL(fileURLWithPath: session.cwd))
+        }
+    }
+}
+
+// MARK: - Legend footer
+
+private struct LegendFooterView: View {
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) { isExpanded.toggle() }
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(isExpanded ? Color.white.opacity(0.7) : Color.white.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 5) {
+                    LegendGroup(title: "Dot color") {
+                        LegendItem(symbol: "circle.fill", color: .claudeAmber,        label: "working or waiting for permission")
+                        LegendItem(symbol: "circle.fill", color: Color.white.opacity(0.35), label: "idle (no activity > 30 s)")
+                        LegendItem(symbol: "circle.fill", color: .claudeGreen,        label: "finished")
+                    }
+                    LegendGroup(title: "Icon") {
+                        LegendItem(symbol: "terminal",      color: Color.white.opacity(0.45), label: "Claude CLI (terminal)")
+                        LegendItem(symbol: "curlybraces",   color: Color.white.opacity(0.45), label: "VS Code / Cursor extension")
+                        LegendItem(symbol: "sparkles",      color: Color.white.opacity(0.45), label: "Claude Desktop app")
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+                .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
+            }
+        }
+    }
+}
+
+private struct LegendGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.25))
+                .tracking(0.8)
+            content()
+        }
+    }
+}
+
+private struct LegendItem: View {
+    let symbol: String
+    let color: Color
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 9))
+                .foregroundStyle(color)
+                .frame(width: 12)
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundStyle(Color.white.opacity(0.5))
         }
     }
 }

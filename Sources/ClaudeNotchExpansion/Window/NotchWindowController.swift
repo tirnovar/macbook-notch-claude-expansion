@@ -63,6 +63,7 @@ final class NotchWindowController: NSObject {
             stopOutsideClickMonitor()
             animate(to: cardFrame(), duration: 0.25)
             window.ignoresMouseEvents = false
+            window.orderFrontRegardless()
         }
     }
 
@@ -91,7 +92,12 @@ final class NotchWindowController: NSObject {
 
     private func cardFrame() -> NSRect {
         let s = screen.frame
-        return NSRect(x: s.midX - cardW / 2, y: notchAreaY - cardBelowH, width: cardW, height: cardBelowH)
+        return NSRect(
+            x: s.midX - cardW / 2,
+            y: notchAreaY - cardBelowH,
+            width: cardW,
+            height: notchAreaHeight + cardBelowH
+        )
     }
 
     private func animate(to frame: NSRect, duration: TimeInterval = 0.28) {
