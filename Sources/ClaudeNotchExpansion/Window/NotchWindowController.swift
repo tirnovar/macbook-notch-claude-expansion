@@ -14,7 +14,9 @@ final class NotchWindowController: NSObject {
     }
 
     private var notchAreaY: CGFloat      { screen.auxiliaryTopLeftArea?.minY ?? screen.frame.maxY - 37 }
-    private var notchAreaHeight: CGFloat { screen.auxiliaryTopLeftArea?.height ?? 37 }
+    // Full notch height = from auxiliaryTopLeftArea.minY (notch bottom) to screen top.
+    // auxiliaryTopLeftArea.height is the safe sub-zone height, which is shorter.
+    private var notchAreaHeight: CGFloat { screen.frame.maxY - notchAreaY }
 
     @MainActor func setup() {
         let root = NotchContentView()

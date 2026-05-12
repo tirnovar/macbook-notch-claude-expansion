@@ -2,46 +2,38 @@ import SwiftUI
 
 struct SessionBarView: View {
     @EnvironmentObject var appState: AppState
+    @State private var pulseOpacity: CGFloat = 1.0
+
+    private var isActive: Bool { appState.activeCount > 0 || appState.waitingCount > 0 }
+    private var totalCount: Int { appState.sessions.filter { !$0.isTerminated }.count }
+    private var dotColor: Color {
+        appState.waitingCount > 0 ? .claudeAmber : .claudePurple
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 0) {
+            // Left of camera housing: session count + status dot
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 7, height: 7)
+                    .opacity(pulseOpacity)
+                Text("\(totalCount)")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+            .padding(.leading, 14)
+
+            Spacer()
+
+            // Right of camera housing: Claude icon
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.claudePurple)
-
-            Divider()
-                .frame(height: 14)
-                .overlay(Color.white.opacity(0.2))
-
-            HStack(spacing: 6) {
-                if appState.activeCount > 0 {
-                    SessionDot(count: appState.activeCount, color: .claudePurple, label: "active")
-                }
-                if appState.waitingCount > 0 {
-                    SessionDot(count: appState.waitingCount, color: .claudeAmber, label: "waiting")
-                        .symbolEffect(.pulse)
-                }
-                if appState.finishedCount > 0 {
-                    SessionDot(count: appState.finishedCount, color: .claudeGreen, label: "done")
-                }
-            }
-
-            if let name = appState.sessions.first(where: { !$0.isTerminated })?.displayName {
-                Divider()
-                    .frame(height: 14)
-                    .overlay(Color.white.opacity(0.2))
-                Text(name)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.65))
-                    .lineLimit(1)
-            }
+                .padding(.trailing, 14)
         }
-        .padding(.horizontal, 14)
-        // Content sits in the left visible zone (left of hardware camera).
-        // Left-aligned so it avoids the center camera zone naturally.
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            // Flat top (flush with hardware notch bottom), rounded bottom corners
             UnevenRoundedRectangle(
                 topLeadingRadius: 8,
                 bottomLeadingRadius: 14,
@@ -51,25 +43,18 @@ struct SessionBarView: View {
             )
             .fill(Color.notchBG)
         )
-    }
-}
-
-private struct SessionDot: View {
-    let count: Int
-    let color: Color
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 6, height: 6)
-            if count > 1 {
-                Text("\(count)")
-                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(color)
+        .task(id: isActive) {
+            guard isActive else {
+                withAnimation(.easeOut(duration: 0.3)) { pulseOpacity = 1.0 }
+                return
+            }
+            while !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.7)) { pulseOpacity = 0.25 }
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.7)) { pulseOpacity = 1.0 }
+                try? await Task.sleep(nanoseconds: 700_000_000)
             }
         }
-        .accessibilityLabel("\(count) \(label)")
     }
 }
