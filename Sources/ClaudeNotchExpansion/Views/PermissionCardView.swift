@@ -3,7 +3,6 @@ import SwiftUI
 struct PermissionCardView: View {
     let permission: PendingPermission
     @EnvironmentObject var appState: AppState
-    @Environment(\.notchHeight) var notchHeight
     @State private var timeRemaining: Double = 90
 
     private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
@@ -14,11 +13,7 @@ struct PermissionCardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Transparent area over the hardware notch (camera housing)
-            Color.clear.frame(height: notchHeight)
-
-            VStack(spacing: 0) {
-            // Card content below the hardware notch
+            // Header
             HStack(spacing: 8) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 11, weight: .semibold))
@@ -46,20 +41,16 @@ struct PermissionCardView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Color.claudePurple)
                         .frame(width: 20)
-
                     Text(permission.toolName)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.white)
-
                     Spacer()
-
                     if let session {
                         Text(session.displayName)
                             .font(.system(size: 10, weight: .regular))
                             .foregroundStyle(Color.white.opacity(0.4))
                     }
                 }
-
                 Text(permission.toolSummary)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Color.white.opacity(0.75))
@@ -67,10 +58,7 @@ struct PermissionCardView: View {
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.05))
-                    )
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.05)))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -79,33 +67,10 @@ struct PermissionCardView: View {
 
             // Action buttons
             HStack(spacing: 8) {
-                PermissionButton(
-                    label: "Accept Once",
-                    style: .primary
-                ) {
-                    decide(.allow, cacheAction: nil)
-                }
-
-                PermissionButton(
-                    label: "For Session",
-                    style: .secondary
-                ) {
-                    decide(.allow, cacheAction: .session)
-                }
-
-                PermissionButton(
-                    label: "Permanently",
-                    style: .secondary
-                ) {
-                    decide(.allow, cacheAction: .permanent)
-                }
-
-                PermissionButton(
-                    label: "Decline",
-                    style: .destructive
-                ) {
-                    decide(.deny, cacheAction: nil)
-                }
+                PermissionButton(label: "Accept Once", style: .primary)   { decide(.allow, cacheAction: nil) }
+                PermissionButton(label: "For Session", style: .secondary) { decide(.allow, cacheAction: .session) }
+                PermissionButton(label: "Permanently", style: .secondary) { decide(.allow, cacheAction: .permanent) }
+                PermissionButton(label: "Decline",     style: .destructive) { decide(.deny, cacheAction: nil) }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -113,8 +78,7 @@ struct PermissionCardView: View {
             // Timeout progress bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.08))
                     RoundedRectangle(cornerRadius: 2)
                         .fill(timerColor)
                         .frame(width: geo.size.width * CGFloat(timeRemaining / 90))
@@ -125,12 +89,18 @@ struct PermissionCardView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 10)
         }
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.notchBG)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 0,
+                bottomLeadingRadius: 18,
+                bottomTrailingRadius: 18,
+                topTrailingRadius: 0,
+                style: .continuous
             )
-            .padding(.horizontal, 4)
-            } // end inner VStack
+            .fill(Color.notchBG)
+        )
+        .padding(.horizontal, 4)
         .onReceive(timer) { _ in
             let elapsed = Date().timeIntervalSince(permission.receivedAt)
             timeRemaining = max(0, 90 - elapsed)
@@ -156,8 +126,6 @@ struct PermissionCardView: View {
             )
         }
         appState.removePermission(id: permission.id)
-
-        // Update session state back to active
         appState.updateSessionState(id: permission.sessionId, state: .active)
     }
 }
@@ -178,10 +146,7 @@ private struct PermissionButton: View {
                 .foregroundStyle(labelColor)
                 .padding(.vertical, 6)
                 .padding(.horizontal, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(bgColor)
-                )
+                .background(RoundedRectangle(cornerRadius: 8).fill(bgColor))
         }
         .buttonStyle(.plain)
     }

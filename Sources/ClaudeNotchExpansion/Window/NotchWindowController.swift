@@ -5,10 +5,9 @@ final class NotchWindowController: NSObject {
     private var window: NSWindow!
 
     private let notchW: CGFloat    = 198
-    private let barW: CGFloat      = 400
-    private let barBelowH: CGFloat = 36   // visible content height below the hardware notch
+    private let barW: CGFloat      = 420  // wider than camera, content shows L/R of it
     private let cardW: CGFloat     = 460
-    private let cardH: CGFloat     = 260
+    private let cardBelowH: CGFloat = 224 // card height below the notch
 
     private var screen: NSScreen {
         NSScreen.screens.first { $0.auxiliaryTopLeftArea != nil } ?? NSScreen.main ?? NSScreen.screens[0]
@@ -46,10 +45,10 @@ final class NotchWindowController: NSObject {
             window.ignoresMouseEvents = true
         case .horizontalBar:
             animate(to: barFrame())
-            window.ignoresMouseEvents = true   // bar is informational — clicks pass through
+            window.ignoresMouseEvents = true   // informational — clicks pass through to menu bar
         case .permissionCard:
             animate(to: cardFrame(), duration: 0.25)
-            window.ignoresMouseEvents = false  // card has buttons
+            window.ignoresMouseEvents = false  // has buttons
         }
     }
 
@@ -57,29 +56,20 @@ final class NotchWindowController: NSObject {
 
     private func notchFrame() -> NSRect {
         let s = screen.frame
-        return NSRect(x: s.midX - notchW / 2, y: notchAreaY, width: notchW, height: notchAreaHeight)
+        // Collapsed: tiny 1pt window sitting at the notch bottom edge — practically invisible
+        return NSRect(x: s.midX - notchW / 2, y: notchAreaY - 1, width: notchW, height: 1)
     }
 
     private func barFrame() -> NSRect {
         let s = screen.frame
-        // Extends notchAreaHeight above + barBelowH below the notch bottom edge
-        return NSRect(
-            x: s.midX - barW / 2,
-            y: notchAreaY - barBelowH,
-            width: barW,
-            height: notchAreaHeight + barBelowH
-        )
+        // Same height as the hardware notch area; content appears left/right of camera
+        return NSRect(x: s.midX - barW / 2, y: notchAreaY, width: barW, height: notchAreaHeight)
     }
 
     private func cardFrame() -> NSRect {
         let s = screen.frame
-        // Top of window == top of screen; extends cardH downward
-        return NSRect(
-            x: s.midX - cardW / 2,
-            y: notchAreaY + notchAreaHeight - cardH,
-            width: cardW,
-            height: cardH
-        )
+        // Starts at the notch bottom, extends cardBelowH downward
+        return NSRect(x: s.midX - cardW / 2, y: notchAreaY - cardBelowH, width: cardW, height: cardBelowH)
     }
 
     private func animate(to frame: NSRect, duration: TimeInterval = 0.28) {

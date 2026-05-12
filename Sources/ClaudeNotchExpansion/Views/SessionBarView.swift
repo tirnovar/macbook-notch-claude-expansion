@@ -2,57 +2,55 @@ import SwiftUI
 
 struct SessionBarView: View {
     @EnvironmentObject var appState: AppState
-    @Environment(\.notchHeight) var notchHeight
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Transparent area that sits behind the hardware notch (camera housing)
-            Color.clear.frame(height: notchHeight)
+        HStack(spacing: 10) {
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.claudePurple)
 
-            // Pill content rendered below the hardware notch
-            HStack(spacing: 10) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.claudePurple)
+            Divider()
+                .frame(height: 14)
+                .overlay(Color.white.opacity(0.2))
 
-                Divider()
-                    .frame(height: 14)
-                    .overlay(Color.white.opacity(0.15))
-
-                HStack(spacing: 6) {
-                    if appState.activeCount > 0 {
-                        SessionDot(count: appState.activeCount, color: .claudePurple, label: "active")
-                    }
-                    if appState.waitingCount > 0 {
-                        SessionDot(count: appState.waitingCount, color: .claudeAmber, label: "waiting")
-                            .symbolEffect(.pulse)
-                    }
-                    if appState.finishedCount > 0 {
-                        SessionDot(count: appState.finishedCount, color: .claudeGreen, label: "done")
-                    }
+            HStack(spacing: 6) {
+                if appState.activeCount > 0 {
+                    SessionDot(count: appState.activeCount, color: .claudePurple, label: "active")
                 }
-
-                if !appState.sessions.filter({ !$0.isTerminated }).isEmpty {
-                    Divider()
-                        .frame(height: 14)
-                        .overlay(Color.white.opacity(0.15))
-
-                    Text(appState.sessions.filter({ !$0.isTerminated }).first?.displayName ?? "")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.65))
-                        .lineLimit(1)
+                if appState.waitingCount > 0 {
+                    SessionDot(count: appState.waitingCount, color: .claudeAmber, label: "waiting")
+                        .symbolEffect(.pulse)
+                }
+                if appState.finishedCount > 0 {
+                    SessionDot(count: appState.finishedCount, color: .claudeGreen, label: "done")
                 }
             }
-            .padding(.horizontal, 14)
-            .frame(maxWidth: .infinity)
-            .frame(height: 34)
-            .background(
-                Capsule()
-                    .fill(Color.notchBG)
-            )
-            .padding(.horizontal, 4)
+
+            if let name = appState.sessions.first(where: { !$0.isTerminated })?.displayName {
+                Divider()
+                    .frame(height: 14)
+                    .overlay(Color.white.opacity(0.2))
+                Text(name)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.65))
+                    .lineLimit(1)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, 14)
+        // Content sits in the left visible zone (left of hardware camera).
+        // Left-aligned so it avoids the center camera zone naturally.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            // Flat top (flush with hardware notch bottom), rounded bottom corners
+            UnevenRoundedRectangle(
+                topLeadingRadius: 8,
+                bottomLeadingRadius: 14,
+                bottomTrailingRadius: 14,
+                topTrailingRadius: 8,
+                style: .continuous
+            )
+            .fill(Color.notchBG)
+        )
     }
 }
 
