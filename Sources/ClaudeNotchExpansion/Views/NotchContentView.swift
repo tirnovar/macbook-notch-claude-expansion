@@ -26,6 +26,7 @@ extension EnvironmentValues {
 
 struct NotchContentView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.notchHeight) var notchHeight
 
     var body: some View {
         switch appState.notchExpansionState {
@@ -36,6 +37,14 @@ struct NotchContentView: View {
         case .horizontalBar:
             SessionBarView()
                 .transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity))
+
+        case .horizontalBarWithDetail:
+            VStack(spacing: 0) {
+                SessionBarView()
+                    .frame(height: notchHeight)
+                DetailPanelView()
+            }
+            .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
 
         case .permissionCard(let permission):
             PermissionCardView(permission: permission)

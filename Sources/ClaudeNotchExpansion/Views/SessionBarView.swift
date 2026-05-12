@@ -6,16 +6,13 @@ struct SessionBarView: View {
 
     private var isActive: Bool { appState.activeCount > 0 || appState.waitingCount > 0 }
     private var totalCount: Int { appState.sessions.filter { !$0.isTerminated }.count }
-    private var dotColor: Color {
-        appState.waitingCount > 0 ? .claudeAmber : .claudePurple
-    }
 
     var body: some View {
         HStack(spacing: 0) {
             // Left of camera housing: session count + status dot
             HStack(spacing: 5) {
                 Circle()
-                    .fill(dotColor)
+                    .fill(Color.claudeAmber)
                     .frame(width: 7, height: 7)
                     .opacity(pulseOpacity)
                 Text("\(totalCount)")
@@ -26,18 +23,20 @@ struct SessionBarView: View {
 
             Spacer()
 
-            // Right of camera housing: Claude icon
+            // Right of camera housing: Claude icon — tap to open session detail
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.claudePurple)
+                .foregroundStyle(appState.isDetailOpen ? Color.white : Color.claudePurple)
                 .padding(.trailing, 14)
+                .contentShape(Rectangle().inset(by: -8))
+                .onTapGesture { appState.toggleDetail() }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             UnevenRoundedRectangle(
                 topLeadingRadius: 0,
-                bottomLeadingRadius: 14,
-                bottomTrailingRadius: 14,
+                bottomLeadingRadius: appState.isDetailOpen ? 0 : 14,
+                bottomTrailingRadius: appState.isDetailOpen ? 0 : 14,
                 topTrailingRadius: 0,
                 style: .continuous
             )

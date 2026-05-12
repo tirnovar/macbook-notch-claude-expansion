@@ -4,12 +4,14 @@ import Combine
 enum NotchExpansionState: Equatable {
     case collapsed
     case horizontalBar
+    case horizontalBarWithDetail
     case permissionCard(PendingPermission)
 
     static func == (lhs: NotchExpansionState, rhs: NotchExpansionState) -> Bool {
         switch (lhs, rhs) {
-        case (.collapsed, .collapsed):             return true
-        case (.horizontalBar, .horizontalBar):     return true
+        case (.collapsed, .collapsed):                       return true
+        case (.horizontalBar, .horizontalBar):               return true
+        case (.horizontalBarWithDetail, .horizontalBarWithDetail): return true
         case (.permissionCard(let l), .permissionCard(let r)): return l == r
         default: return false
         }
@@ -23,6 +25,8 @@ final class AppState: ObservableObject {
     @Published var sessions: [ClaudeSession] = []
     @Published var pendingPermissions: [PendingPermission] = []
     @Published var notchExpansionState: NotchExpansionState = .collapsed
+
+    private(set) var isDetailOpen = false
 
     private init() {}
 
@@ -52,6 +56,19 @@ final class AppState: ObservableObject {
         recalcState()
     }
 
+    // MARK: - Detail panel toggle
+
+    func toggleDetail() {
+        isDetailOpen.toggle()
+        recalcState()
+    }
+
+    func closeDetail() {
+        guard isDetailOpen else { return }
+        isDetailOpen = false
+        recalcState()
+    }
+
     // MARK: - Derived state
 
     var activeCount: Int {
@@ -78,10 +95,12 @@ final class AppState: ObservableObject {
 
     private func recalcState() {
         if let top = pendingPermissions.first {
+            isDetailOpen = false
             notchExpansionState = .permissionCard(top)
         } else if sessions.contains(where: { !$0.isTerminated }) {
-            notchExpansionState = .horizontalBar
+            notchExpansionState = isDetailOpen ? .horizontalBarWithDetail : .horizontalBar
         } else {
+            isDetailOpen = false
             notchExpansionState = .collapsed
         }
     }
