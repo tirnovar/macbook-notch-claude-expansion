@@ -35,10 +35,10 @@ struct SessionBarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             UnevenRoundedRectangle(
-                topLeadingRadius: 8,
+                topLeadingRadius: 0,
                 bottomLeadingRadius: 14,
                 bottomTrailingRadius: 14,
-                topTrailingRadius: 8,
+                topTrailingRadius: 0,
                 style: .continuous
             )
             .fill(Color.notchBG)

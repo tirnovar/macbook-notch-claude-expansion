@@ -5,7 +5,7 @@ final class NotchWindowController: NSObject {
     private var window: NSWindow!
 
     private let notchW: CGFloat    = 198
-    private let barW: CGFloat      = 420  // wider than camera, content shows L/R of it
+    private let barW: CGFloat      = 300  // just enough to show content L/R of camera
     private let cardW: CGFloat     = 460
     private let cardBelowH: CGFloat = 224 // card height below the notch
 
