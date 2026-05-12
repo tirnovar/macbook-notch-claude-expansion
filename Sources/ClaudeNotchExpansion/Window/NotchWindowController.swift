@@ -4,8 +4,9 @@ import SwiftUI
 final class NotchWindowController: NSObject {
     private var window: NSWindow!
 
-    private let notchW: CGFloat      = 198
-    private let barW: CGFloat        = 360  // unified width for bar AND detail panel
+    private let notchW: CGFloat       = 198
+    private let barNarrowW: CGFloat   = 278  // collapsed bar — ~5pt gap between content and notch edge
+    private let barW: CGFloat         = 360  // expanded width for detail panel
     private let detailBelowH: CGFloat = 260
     private let cardW: CGFloat       = 460
     private let cardBelowH: CGFloat  = 224
@@ -74,7 +75,7 @@ final class NotchWindowController: NSObject {
 
     private func barFrame() -> NSRect {
         let s = screen.frame
-        return NSRect(x: s.midX - barW / 2, y: notchAreaY, width: barW, height: notchAreaHeight)
+        return NSRect(x: s.midX - barNarrowW / 2, y: notchAreaY, width: barNarrowW, height: notchAreaHeight)
     }
 
     private func barDetailFrame() -> NSRect {

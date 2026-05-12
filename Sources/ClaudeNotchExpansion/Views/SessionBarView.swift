@@ -26,7 +26,7 @@ struct SessionBarView: View {
             // Right of camera: expand/collapse chevron
             Image(systemName: appState.isDetailOpen ? "chevron.up" : "chevron.down")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(appState.isDetailOpen ? Color.white.opacity(0.9) : Color.white.opacity(0.55))
+                .foregroundStyle(appState.isDetailOpen ? Color.white.opacity(0.9) : Color.claudeAmber)
                 .frame(width: 20, height: 20)
                 .contentShape(Rectangle().inset(by: -8))
                 .onTapGesture { appState.toggleDetail() }
