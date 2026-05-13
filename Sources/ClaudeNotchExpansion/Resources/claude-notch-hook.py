@@ -74,23 +74,33 @@ def _glob_to_regex(pattern):
     return re.compile(''.join(['.*'.join(regex_parts)]) + '$')
 
 
-def _is_allowed_by_settings(tool_name, tool_input):
-    """Return True if this tool call matches any entry in ~/.claude/settings.json permissions.allow."""
-    settings_path = os.path.expanduser("~/.claude/settings.json")
+def _load_allow_patterns(settings_path):
     try:
         with open(settings_path) as f:
-            settings = json.load(f)
-        allow_patterns = settings.get("permissions", {}).get("allow", [])
+            return json.load(f).get("permissions", {}).get("allow", [])
     except Exception:
-        return False
+        return []
+
+
+def _is_allowed_by_settings(tool_name, tool_input, cwd=""):
+    """Check permissions.allow across global + project-level settings files."""
+    candidates = [
+        os.path.expanduser("~/.claude/settings.json"),
+    ]
+    if cwd:
+        candidates += [
+            os.path.join(cwd, ".claude", "settings.json"),
+            os.path.join(cwd, ".claude", "settings.local.json"),
+        ]
 
     tool_key = _make_tool_key(tool_name, tool_input)
-    for pattern in allow_patterns:
-        try:
-            if _glob_to_regex(pattern).fullmatch(tool_key):
-                return True
-        except re.error:
-            continue
+    for path in candidates:
+        for pattern in _load_allow_patterns(path):
+            try:
+                if _glob_to_regex(pattern).fullmatch(tool_key):
+                    return True
+            except re.error:
+                continue
     return False
 
 
@@ -179,13 +189,14 @@ def main():
     session_id = hook_input.get("session_id", "")
     tool_name  = hook_input.get("tool_name", "")
     tool_input = hook_input.get("tool_input", {})
+    cwd        = hook_input.get("cwd", "")
 
     # 2. Fast-path checks — no socket needed
     tool_key = _make_tool_key(tool_name, tool_input)
     if _check_session_cache(session_id, tool_key):
         _output_allow()
         return
-    if _is_allowed_by_settings(tool_name, tool_input):
+    if _is_allowed_by_settings(tool_name, tool_input, cwd=cwd):
         _output_allow()
         return
 
