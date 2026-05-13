@@ -72,10 +72,8 @@ final class AppState: ObservableObject {
 
     var activeCount: Int {
         sessions.filter {
-            switch $0.state {
-            case .active, .idle: return true
-            default: return false
-            }
+            if case .active = $0.state { return true }
+            return false
         }.count
     }
 

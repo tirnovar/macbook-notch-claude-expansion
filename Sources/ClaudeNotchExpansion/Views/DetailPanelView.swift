@@ -10,17 +10,21 @@ struct DetailPanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if activeSessions.isEmpty {
-                Text("No active sessions")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.white.opacity(0.4))
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
-            } else {
-                ForEach(Array(activeSessions.enumerated()), id: \.element.id) { idx, session in
-                    SessionRowView(session: session)
-                    if idx < activeSessions.count - 1 {
-                        Divider().overlay(Color.white.opacity(0.07))
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if activeSessions.isEmpty {
+                        Text("No active sessions")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.white.opacity(0.4))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 20)
+                    } else {
+                        ForEach(Array(activeSessions.enumerated()), id: \.element.id) { idx, session in
+                            SessionRowView(session: session)
+                            if idx < activeSessions.count - 1 {
+                                Divider().overlay(Color.white.opacity(0.07))
+                            }
+                        }
                     }
                 }
             }

@@ -49,7 +49,7 @@ extension ClaudeSession {
         self.startedAt = Date(timeIntervalSince1970: file.startedAt / 1000)
         self.version = file.version
         self.entrypoint = file.entrypoint ?? "claude"
-        self.state = .active
+        self.state = .idle
         self.lastActivityAt = Date()
     }
 }

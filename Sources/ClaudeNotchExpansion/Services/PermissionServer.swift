@@ -42,94 +42,64 @@ actor PermissionServer {
     static let socketPath = "/tmp/claude-notch-monitor.sock"
 
     private var pendingContinuations: [String: CheckedContinuation<PermissionResponseMessage, Error>] = [:]
-    private var serverTask: Task<Void, Never>?
 
     private init() {}
 
     func start() async {
-        cleanup()
-        serverTask = Task { await runServer() }
-    }
-
-    private func cleanup() {
         try? FileManager.default.removeItem(atPath: Self.socketPath)
-    }
-
-    // MARK: - TCP-style Unix socket server
-
-    private func runServer() async {
-        let serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard serverFD >= 0 else { return }
-        defer { close(serverFD) }
-
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        let path = Self.socketPath
-        withUnsafeMutablePointer(to: &addr.sun_path) {
-            $0.withMemoryRebound(to: CChar.self, capacity: 108) { ptr in
-                _ = strncpy(ptr, path, 107)
-            }
-        }
-
-        let bindResult = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                bind(serverFD, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
-            }
-        }
-        guard bindResult == 0 else { return }
-        guard listen(serverFD, 32) == 0 else { return }
-
-        while !Task.isCancelled {
-            let clientFD = accept(serverFD, nil, nil)
-            guard clientFD >= 0 else { continue }
-            Task { await self.handleClient(clientFD: clientFD) }
+        // Socket server runs entirely on background OS threads — never touches actor executor
+        DispatchQueue(label: "notch.socket.accept", qos: .utility).async {
+            socketAcceptLoop(server: self)
         }
     }
 
-    private func handleClient(clientFD: Int32) async {
-        defer { close(clientFD) }
+    // MARK: - Called by socket background thread to get a decision
 
+    func processRequest(_ request: PermissionRequestMessage) async -> PermissionResponseMessage {
+        await SessionMonitor.shared.markWaiting(
+            sessionId: request.sessionId,
+            requestId: request.requestId
+        )
+
+        let toolKey = makeToolKey(name: request.toolName, input: request.toolInput)
+        let cached = await SessionPermissionCache.shared.isAllowed(
+            sessionId: request.sessionId,
+            toolKey: toolKey
+        )
+
+        if cached {
+            await SessionMonitor.shared.markActive(sessionId: request.sessionId)
+            return PermissionResponseMessage(
+                messageType: "permission_response",
+                requestId: request.requestId,
+                decision: .allow,
+                cacheAction: nil,
+                reason: "session cache"
+            )
+        }
+
+        let pending = PendingPermission(
+            id: request.requestId,
+            sessionId: request.sessionId,
+            toolName: request.toolName,
+            toolInput: request.toolInput,
+            receivedAt: Date(),
+            timeoutAt: Date().addingTimeInterval(90)
+        )
+
+        // Show permission card on main thread
+        await MainActor.run { AppState.shared.addPermission(pending) }
+
+        // Wait for UI decision (or 90s timeout → allow)
+        let response: PermissionResponseMessage
         do {
-            let request = try readFramed(fd: clientFD, as: PermissionRequestMessage.self)
-
-            // Notify session monitor
-            await SessionMonitor.shared.markWaiting(
-                sessionId: request.sessionId,
-                requestId: request.requestId
-            )
-
-            // Check session cache first
-            let toolKey = makeToolKey(name: request.toolName, input: request.toolInput)
-            let cached = await SessionPermissionCache.shared.isAllowed(
-                sessionId: request.sessionId,
-                toolKey: toolKey
-            )
-
-            if cached {
-                let response = PermissionResponseMessage(
-                    messageType: "permission_response",
-                    requestId: request.requestId,
-                    decision: .allow,
-                    cacheAction: nil,
-                    reason: "session cache"
-                )
-                try writeFramed(fd: clientFD, message: response)
-                await SessionMonitor.shared.markActive(sessionId: request.sessionId)
-                return
-            }
-
-            // Show UI — block until user decides
-            let pending = await buildPending(from: request)
-            let response = try await withTimeout(seconds: 90) {
+            let reqId = request.requestId
+            response = try await withTimeout(seconds: 90) {
                 try await withCheckedThrowingContinuation { continuation in
-                    Task { await self.registerContinuation(id: request.requestId, cont: continuation) }
-
-                    Task { @MainActor in
-                        AppState.shared.addPermission(pending)
-                    }
+                    // Task hops back to actor to register continuation
+                    Task { await self.registerContinuation(id: reqId, cont: continuation) }
                 }
             } fallback: {
-                // Timeout → allow (user preference)
                 PermissionResponseMessage(
                     messageType: "permission_response",
                     requestId: request.requestId,
@@ -138,20 +108,18 @@ actor PermissionServer {
                     reason: "timeout"
                 )
             }
-
-            try writeFramed(fd: clientFD, message: response)
-            await SessionMonitor.shared.markActive(sessionId: request.sessionId)
-
         } catch {
-            let deny = PermissionResponseMessage(
+            response = PermissionResponseMessage(
                 messageType: "permission_response",
-                requestId: UUID().uuidString,
+                requestId: request.requestId,
                 decision: .deny,
                 cacheAction: nil,
-                reason: "internal error"
+                reason: "cancelled"
             )
-            try? writeFramed(fd: clientFD, message: deny)
         }
+
+        await SessionMonitor.shared.markActive(sessionId: request.sessionId)
+        return response
     }
 
     private func registerContinuation(
@@ -161,7 +129,7 @@ actor PermissionServer {
         pendingContinuations[id] = cont
     }
 
-    // MARK: - Public: UI calls this
+    // MARK: - Called by UI buttons
 
     func submitDecision(
         requestId: String,
@@ -170,9 +138,7 @@ actor PermissionServer {
     ) async {
         guard let cont = pendingContinuations.removeValue(forKey: requestId) else { return }
 
-        // Handle cache side effects
         if let cacheAction {
-            // Retrieve the pending permission to get sessionId + toolKey
             let pending = await MainActor.run {
                 AppState.shared.pendingPermissions.first { $0.id == requestId }
             }
@@ -189,69 +155,110 @@ actor PermissionServer {
             }
         }
 
-        let response = PermissionResponseMessage(
+        cont.resume(returning: PermissionResponseMessage(
             messageType: "permission_response",
             requestId: requestId,
             decision: decision,
             cacheAction: cacheAction?.rawValue,
             reason: nil
-        )
-        cont.resume(returning: response)
+        ))
     }
+}
 
-    // MARK: - Framing helpers (4-byte big-endian length prefix)
+// MARK: - Socket accept loop (runs on background DispatchQueue, never on actor)
 
-    private func readFramed<T: Decodable>(fd: Int32, as type: T.Type) throws -> T {
-        var header = Data(count: 4)
-        try header.withUnsafeMutableBytes { ptr in
-            var received = 0
-            while received < 4 {
-                let n = read(fd, ptr.baseAddress!.advanced(by: received), 4 - received)
-                guard n > 0 else { throw CocoaError(.fileReadUnknown) }
-                received += n
-            }
-        }
-        let length = header.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+private func socketAcceptLoop(server: PermissionServer) {
+    let serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
+    guard serverFD >= 0 else { return }
+    defer { close(serverFD) }
 
-        var body = Data(count: Int(length))
-        try body.withUnsafeMutableBytes { ptr in
-            var received = 0
-            while received < Int(length) {
-                let n = read(fd, ptr.baseAddress!.advanced(by: received), Int(length) - received)
-                guard n > 0 else { throw CocoaError(.fileReadUnknown) }
-                received += n
-            }
-        }
-        return try JSONDecoder().decode(T.self, from: body)
-    }
-
-    private func writeFramed<T: Encodable>(fd: Int32, message: T) throws {
-        let body = try JSONEncoder().encode(message)
-        var length = UInt32(body.count).bigEndian
-        let header = Data(bytes: &length, count: 4)
-        let payload = header + body
-        try payload.withUnsafeBytes { ptr in
-            var sent = 0
-            while sent < payload.count {
-                let n = write(fd, ptr.baseAddress!.advanced(by: sent), payload.count - sent)
-                guard n > 0 else { throw CocoaError(.fileWriteUnknown) }
-                sent += n
-            }
+    var addr = sockaddr_un()
+    addr.sun_family = sa_family_t(AF_UNIX)
+    let path = PermissionServer.socketPath
+    withUnsafeMutablePointer(to: &addr.sun_path) {
+        $0.withMemoryRebound(to: CChar.self, capacity: 108) { ptr in
+            _ = strncpy(ptr, path, 107)
         }
     }
 
-    // MARK: - Build PendingPermission from wire request
-
-    private func buildPending(from req: PermissionRequestMessage) async -> PendingPermission {
-        PendingPermission(
-            id: req.requestId,
-            sessionId: req.sessionId,
-            toolName: req.toolName,
-            toolInput: req.toolInput,
-            receivedAt: Date(),
-            timeoutAt: Date().addingTimeInterval(90)
-        )
+    let bindResult = withUnsafePointer(to: &addr) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+            bind(serverFD, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+        }
     }
+    guard bindResult == 0, listen(serverFD, 32) == 0 else { return }
+
+    while true {
+        let clientFD = accept(serverFD, nil, nil)
+        guard clientFD >= 0 else { continue }
+        DispatchQueue(label: "notch.socket.client", qos: .utility, attributes: .concurrent).async {
+            handleConnection(clientFD: clientFD, server: server)
+        }
+    }
+}
+
+// MARK: - Per-connection handler (blocking I/O on background thread)
+
+private func handleConnection(clientFD: Int32, server: PermissionServer) {
+    defer { close(clientFD) }
+
+    guard let request = try? readFramed(fd: clientFD, as: PermissionRequestMessage.self) else { return }
+
+    // Bridge async actor decision → synchronous write
+    let sema = DispatchSemaphore(value: 0)
+    var response: PermissionResponseMessage?
+
+    Task {
+        response = await server.processRequest(request)
+        sema.signal()
+    }
+
+    _ = sema.wait(timeout: .now() + 92)
+
+    if let response, let _ = try? writeFramed(fd: clientFD, message: response) { }
+}
+
+// MARK: - Framing helpers (free functions — no actor involvement)
+
+private func readFramed<T: Decodable>(fd: Int32, as type: T.Type) throws -> T {
+    var header = Data(count: 4)
+    try header.withUnsafeMutableBytes { ptr in
+        var received = 0
+        while received < 4 {
+            let n = read(fd, ptr.baseAddress!.advanced(by: received), 4 - received)
+            guard n > 0 else { throw CocoaError(.fileReadUnknown) }
+            received += n
+        }
+    }
+    let length = header.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+
+    var body = Data(count: Int(length))
+    try body.withUnsafeMutableBytes { ptr in
+        var received = 0
+        while received < Int(length) {
+            let n = read(fd, ptr.baseAddress!.advanced(by: received), Int(length) - received)
+            guard n > 0 else { throw CocoaError(.fileReadUnknown) }
+            received += n
+        }
+    }
+    return try JSONDecoder().decode(T.self, from: body)
+}
+
+@discardableResult
+private func writeFramed<T: Encodable>(fd: Int32, message: T) throws -> Bool {
+    let body = try JSONEncoder().encode(message)
+    var length = UInt32(body.count).bigEndian
+    let header = Data(bytes: &length, count: 4)
+    let payload = header + body
+    try payload.withUnsafeBytes { ptr in
+        var sent = 0
+        while sent < payload.count {
+            let n = write(fd, ptr.baseAddress!.advanced(by: sent), payload.count - sent)
+            guard n > 0 else { throw CocoaError(.fileWriteUnknown) }
+            sent += n
+        }
+    }
+    return true
 }
 
 // MARK: - Tool key normalization
