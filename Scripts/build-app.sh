@@ -19,6 +19,7 @@ cp "$BINARY"                                   "$APP/Contents/MacOS/ClaudeNotchE
 cp "$RESOURCES_SRC/Info.plist"                 "$APP/Contents/Info.plist"
 cp "$RESOURCES_SRC/claude-notch-hook.py"       "$APP/Contents/Resources/claude-notch-hook.py"
 chmod 755 "$APP/Contents/Resources/claude-notch-hook.py"
+[ -f "$RESOURCES_SRC/AppIcon.icns" ] && cp "$RESOURCES_SRC/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 echo "✓ Built: $APP"
 echo ""
