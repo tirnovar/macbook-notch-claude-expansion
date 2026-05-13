@@ -10,6 +10,7 @@ import socket
 import struct
 import uuid
 import os
+import re
 import time
 
 SOCKET_PATH = "/tmp/claude-notch-monitor.sock"
@@ -59,6 +60,38 @@ def _make_tool_key(tool_name, tool_input):
         fp = tool_input.get("file_path", "")
         return f"Read({fp})"
     return tool_name
+
+
+# MARK: - Global permissions.allow check
+
+def _glob_to_regex(pattern):
+    """Convert a glob pattern (supporting ** and *) to a compiled regex."""
+    parts = pattern.split('**')
+    regex_parts = []
+    for part in parts:
+        sub = part.split('*')
+        regex_parts.append('[^/]*'.join(re.escape(s) for s in sub))
+    return re.compile(''.join(['.*'.join(regex_parts)]) + '$')
+
+
+def _is_allowed_by_settings(tool_name, tool_input):
+    """Return True if this tool call matches any entry in ~/.claude/settings.json permissions.allow."""
+    settings_path = os.path.expanduser("~/.claude/settings.json")
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+        allow_patterns = settings.get("permissions", {}).get("allow", [])
+    except Exception:
+        return False
+
+    tool_key = _make_tool_key(tool_name, tool_input)
+    for pattern in allow_patterns:
+        try:
+            if _glob_to_regex(pattern).fullmatch(tool_key):
+                return True
+        except re.error:
+            continue
+    return False
 
 
 # MARK: - Session cache
@@ -111,9 +144,12 @@ def main():
     tool_name  = hook_input.get("tool_name", "")
     tool_input = hook_input.get("tool_input", {})
 
-    # 2. Session cache check (fast path, no socket needed)
+    # 2. Fast-path checks — no socket needed
     tool_key = _make_tool_key(tool_name, tool_input)
     if _check_session_cache(session_id, tool_key):
+        _output_allow()
+        return
+    if _is_allowed_by_settings(tool_name, tool_input):
         _output_allow()
         return
 
@@ -136,7 +172,8 @@ def main():
     except (FileNotFoundError, ConnectionRefusedError, OSError):
         # App not running → allow (don't block Claude Code)
         sock.close()
-        sys.exit(0)
+        _output_allow()
+        return
 
     try:
         sock.settimeout(RESPONSE_TIMEOUT)
@@ -149,7 +186,8 @@ def main():
         return
     except Exception:
         sock.close()
-        sys.exit(0)  # any other error → allow
+        _output_allow()
+        return
     finally:
         sock.close()
 
@@ -165,4 +203,4 @@ if __name__ == "__main__":
         main()
     except Exception:
         # Safety net: never hang Claude Code
-        sys.exit(0)
+        _output_allow()

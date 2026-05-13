@@ -10,6 +10,7 @@ actor SessionMonitor {
     private var activeSessions: [String: ClaudeSession] = [:]
     private var eventStream: FSEventStreamRef?
     private var idleTimers: [String: Task<Void, Never>] = [:]
+    private var livenessTimer: Task<Void, Never>?
 
     private init() {
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -23,6 +24,7 @@ actor SessionMonitor {
     func start() async {
         loadExisting()
         startFSEvents()
+        startLivenessTimer()
     }
 
     // MARK: - Load sessions that existed before app launch
@@ -141,36 +143,50 @@ actor SessionMonitor {
             includingPropertiesForKeys: nil
         ) else { return }
 
-        let currentFiles = Set(
-            items.filter { $0.pathExtension == "json" }
-                 .compactMap { url -> String? in
-                     guard
-                         let data = try? Data(contentsOf: url),
-                         let file = try? JSONDecoder().decode(SessionFile.self, from: data)
-                     else { return nil }
-                     return file.sessionId
-                 }
-        )
-
-        // Remove sessions whose files disappeared
-        for (id, _) in activeSessions where !currentFiles.contains(id) {
-            markFinished(id: id)
-        }
-
-        // Add new sessions
+        // Build map sessionId → file so we can check PID liveness per-session
+        var fileMap: [String: SessionFile] = [:]
         for url in items where url.pathExtension == "json" {
             guard
                 let data = try? Data(contentsOf: url),
-                let file = try? JSONDecoder().decode(SessionFile.self, from: data),
-                activeSessions[file.sessionId] == nil,
+                let file = try? JSONDecoder().decode(SessionFile.self, from: data)
+            else { continue }
+            fileMap[file.sessionId] = file
+        }
+
+        // Finish sessions whose file is gone OR whose PID died
+        for (id, _) in activeSessions {
+            if let file = fileMap[id] {
+                if !isAlive(Int32(file.pid), startedAt: Date(timeIntervalSince1970: file.startedAt / 1000)) {
+                    markFinished(id: id)
+                }
+            } else {
+                markFinished(id: id)
+            }
+        }
+
+        // Add new live sessions
+        for (sessionId, file) in fileMap {
+            guard
+                activeSessions[sessionId] == nil,
                 isAlive(Int32(file.pid), startedAt: Date(timeIntervalSince1970: file.startedAt / 1000))
             else { continue }
-
             let session = ClaudeSession(from: file)
             activeSessions[session.id] = session
         }
 
         publish()
+    }
+
+    // MARK: - Periodic liveness check (catches dead sessions with no FSEvent)
+
+    private func startLivenessTimer() {
+        livenessTimer = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(30))
+                guard !Task.isCancelled else { return }
+                await self?.refreshSessions()
+            }
+        }
     }
 
     // MARK: - Public API for PermissionServer
