@@ -4,14 +4,18 @@ import CoreServices
 actor SessionMonitor {
     static let shared = SessionMonitor()
 
-    private let sessionsDir: URL
-    private var activeSessions: [String: ClaudeSession] = [:]   // sessionId → session
+    private let claudeDir:    URL
+    private let sessionsDir:  URL
+    private let projectsDir:  URL
+    private var activeSessions: [String: ClaudeSession] = [:]
     private var eventStream: FSEventStreamRef?
     private var idleTimers: [String: Task<Void, Never>] = [:]
 
     private init() {
-        sessionsDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude/sessions")
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        claudeDir   = home.appendingPathComponent(".claude")
+        sessionsDir = home.appendingPathComponent(".claude/sessions")
+        projectsDir = home.appendingPathComponent(".claude/projects")
     }
 
     // MARK: - Start
@@ -48,10 +52,10 @@ actor SessionMonitor {
         }
     }
 
-    // MARK: - FSEvents
+    // MARK: - FSEvents (watch entire ~/.claude/ to catch both session files and transcripts)
 
     private func startFSEvents() {
-        let path = sessionsDir.path as CFString
+        let path = claudeDir.path as CFString
         let paths = [path] as CFArray
         let interval: CFTimeInterval = 0.5
 
@@ -68,8 +72,12 @@ actor SessionMonitor {
         let stream = FSEventStreamCreate(
             kCFAllocatorDefault,
             { _, info, _, eventPaths, _, _ in
-                let monitor = Unmanaged<SessionMonitor>.fromOpaque(info!).takeUnretainedValue()
-                Task { await monitor.refreshSessions() }
+                guard let info else { return }
+                let cfArray = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
+                // CFArray of CFString bridges cleanly to [String] via toll-free bridging
+                let paths = cfArray as! [String]
+                let monitor = Unmanaged<SessionMonitor>.fromOpaque(info).takeUnretainedValue()
+                Task { await monitor.handleFSEvents(paths: paths) }
             },
             &context,
             paths,
@@ -84,7 +92,48 @@ actor SessionMonitor {
         FSEventStreamStart(stream)
     }
 
-    // MARK: - Refresh on filesystem change
+    // MARK: - Dispatch FSEvents by directory
+
+    private func handleFSEvents(paths: [String]) {
+        let sessionsPfx = sessionsDir.path
+        let projectsPfx = projectsDir.path
+
+        var needsSessionRefresh = false
+        for path in paths {
+            if path.hasPrefix(sessionsPfx) {
+                needsSessionRefresh = true
+            } else if path.hasPrefix(projectsPfx) {
+                markActiveForProjectPath(path)
+            }
+        }
+        if needsSessionRefresh { refreshSessions() }
+    }
+
+    // MARK: - Transcript activity → mark session active
+
+    private func markActiveForProjectPath(_ path: String) {
+        // Path: ~/.claude/projects/{encodedCwd}/...
+        let prefix = projectsDir.path + "/"
+        guard path.hasPrefix(prefix) else { return }
+        let rest = String(path.dropFirst(prefix.count))
+        guard let encodedDir = rest.components(separatedBy: "/").first, !encodedDir.isEmpty else { return }
+
+        for (id, session) in activeSessions {
+            if case .finished = session.state { continue }
+            if case .waitingForPermission = session.state { continue }
+
+            // Encode cwd the same way Claude Code does: replace "/" with "-"
+            let encoded = "-" + String(session.cwd.dropFirst())
+                .replacingOccurrences(of: "/", with: "-")
+
+            if encodedDir == encoded {
+                markActive(sessionId: id)
+                return
+            }
+        }
+    }
+
+    // MARK: - Refresh on session file change
 
     private func refreshSessions() {
         guard let items = try? FileManager.default.contentsOfDirectory(
@@ -144,7 +193,8 @@ actor SessionMonitor {
     private func scheduleIdleTimer(for sessionId: String) {
         idleTimers[sessionId]?.cancel()
         idleTimers[sessionId] = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(30))
+            // 120s: long enough to cover pauses between tool uses during active work
+            try? await Task.sleep(for: .seconds(120))
             guard !Task.isCancelled else { return }
             await self?.setIdle(sessionId: sessionId)
         }
@@ -162,7 +212,6 @@ actor SessionMonitor {
         idleTimers[id]?.cancel()
         idleTimers.removeValue(forKey: id)
         activeSessions[id]?.state = .finished
-        // Auto-remove finished sessions after 5s
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             await self?.removeSession(id: id)
@@ -185,7 +234,6 @@ actor SessionMonitor {
         guard kill(pid, 0) == 0 || errno == EPERM else { return false }
         guard let expected = startedAt else { return true }
 
-        // Guard against PID reuse: compare kernel process start time with session file timestamp
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var info = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.size
@@ -193,8 +241,6 @@ actor SessionMonitor {
 
         let procStartSec = Double(info.kp_proc.p_starttime.tv_sec)
         guard procStartSec > 0 else { return true }
-        // A reused PID has a start time AFTER the session file was written.
-        // Real sessions always start before or around when the file is created.
         return procStartSec <= expected.timeIntervalSince1970 + 5
     }
 }

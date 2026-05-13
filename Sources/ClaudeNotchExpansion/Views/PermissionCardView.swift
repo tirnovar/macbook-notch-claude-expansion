@@ -15,9 +15,19 @@ struct PermissionCardView: View {
         VStack(spacing: 0) {
             // Header
             HStack(spacing: 8) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.claudePurple)
+                // Session count indicator (mirrors the notch bar pill)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.claudeAmber)
+                        .frame(width: 6, height: 6)
+                    Text("\(appState.sessions.filter { !$0.isTerminated }.count)")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.claudeAmber)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(Color.claudeAmber.opacity(0.12)))
+
                 Text("Claude needs permission")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
