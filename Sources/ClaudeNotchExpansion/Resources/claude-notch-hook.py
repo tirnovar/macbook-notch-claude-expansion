@@ -8,6 +8,7 @@ import sys
 import json
 import socket
 import struct
+import subprocess
 import uuid
 import os
 import re
@@ -141,15 +142,42 @@ def _output_deny(reason="Permission denied"):
     sys.exit(2)
 
 
+# MARK: - Auto-launch app when not running
+
+def _app_bundle_path():
+    hook_path = os.path.abspath(__file__)
+    marker = ".app/Contents/Resources/claude-notch-hook.py"
+    if marker not in hook_path:
+        return None
+    return hook_path[:hook_path.index(marker)] + ".app"
+
+
+def _try_launch_app():
+    """Launch the notch app in the background and wait for the socket to appear."""
+    bundle = _app_bundle_path()
+    if not bundle or not os.path.isdir(bundle):
+        return False
+    try:
+        subprocess.Popen(["open", "-g", bundle],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            if os.path.exists(SOCKET_PATH):
+                time.sleep(0.1)  # brief settle time
+                return True
+            time.sleep(0.1)
+    except Exception:
+        pass
+    return False
+
+
 # MARK: - Self-cleanup when .app bundle is gone
 
 def _uninstall_if_app_gone():
     """If this script's .app bundle no longer exists, remove the hook entry from settings.json."""
-    hook_path = os.path.abspath(__file__)
-    marker = ".app/Contents/Resources/claude-notch-hook.py"
-    if marker not in hook_path:
+    app_bundle = _app_bundle_path()
+    if app_bundle is None:
         return  # running outside a bundle (dev/test), skip
-    app_bundle = hook_path[:hook_path.index(marker)] + ".app"
     if os.path.isdir(app_bundle):
         return  # app still there
 
@@ -217,10 +245,18 @@ def main():
         sock.settimeout(CONNECT_TIMEOUT)
         sock.connect(SOCKET_PATH)
     except (FileNotFoundError, ConnectionRefusedError, OSError):
-        # App not running → allow (don't block Claude Code)
         sock.close()
-        _output_allow()
-        return
+        # App not running — try to launch it and retry once
+        if _try_launch_app():
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                sock.settimeout(CONNECT_TIMEOUT)
+                sock.connect(SOCKET_PATH)
+            except (FileNotFoundError, ConnectionRefusedError, OSError):
+                sock.close()
+                sys.exit(0)  # still unreachable → built-in UI as fallback
+        else:
+            sys.exit(0)  # can't start app → built-in UI as fallback
 
     try:
         sock.settimeout(RESPONSE_TIMEOUT)

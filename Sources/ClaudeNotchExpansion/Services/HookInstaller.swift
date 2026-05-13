@@ -118,14 +118,13 @@ final class HookInstaller {
     // MARK: - LaunchAgent
 
     private func installLaunchAgent() {
-        guard !FileManager.default.fileExists(atPath: launchAgentURL.path) else { return }
         guard let appPath = Bundle.main.bundlePath as String? else { return }
 
         let plist: [String: Any] = [
             "Label": bundleID,
             "ProgramArguments": ["\(appPath)/Contents/MacOS/ClaudeNotchExpansion"],
             "RunAtLoad": true,
-            "KeepAlive": false
+            "KeepAlive": true
         ]
 
         guard let data = try? PropertyListSerialization.data(
@@ -136,13 +135,24 @@ final class HookInstaller {
             at: launchAgentURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+
+        // Always write — handles both first install and path/config updates
+        let existing = try? Data(contentsOf: launchAgentURL)
+        guard data != existing else { return }
+
         try? data.write(to: launchAgentURL, options: .atomic)
 
-        // Register with launchd
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        task.arguments = ["bootstrap", "gui/\(getuid())", launchAgentURL.path]
-        try? task.run()
+        // Reload: bootout (ignore error if not loaded), then bootstrap
+        let bootout = Process()
+        bootout.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        bootout.arguments = ["bootout", "gui/\(getuid())/\(bundleID)"]
+        try? bootout.run()
+        bootout.waitUntilExit()
+
+        let bootstrap = Process()
+        bootstrap.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        bootstrap.arguments = ["bootstrap", "gui/\(getuid())", launchAgentURL.path]
+        try? bootstrap.run()
     }
 
     // MARK: - Helpers
