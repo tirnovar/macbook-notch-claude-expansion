@@ -131,9 +131,45 @@ def _output_deny(reason="Permission denied"):
     sys.exit(2)
 
 
+# MARK: - Self-cleanup when .app bundle is gone
+
+def _uninstall_if_app_gone():
+    """If this script's .app bundle no longer exists, remove the hook entry from settings.json."""
+    hook_path = os.path.abspath(__file__)
+    marker = ".app/Contents/Resources/claude-notch-hook.py"
+    if marker not in hook_path:
+        return  # running outside a bundle (dev/test), skip
+    app_bundle = hook_path[:hook_path.index(marker)] + ".app"
+    if os.path.isdir(app_bundle):
+        return  # app still there
+
+    # App is gone — scrub our hook entry from ~/.claude/settings.json
+    settings_path = os.path.expanduser("~/.claude/settings.json")
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+        pre = settings.get("hooks", {}).get("PreToolUse", [])
+        pre = [
+            m for m in pre
+            if not any(
+                str(h.get("command", "")).endswith("/claude-notch-hook.py")
+                for h in m.get("hooks", [])
+            )
+        ]
+        settings.setdefault("hooks", {})["PreToolUse"] = pre
+        tmp = settings_path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(settings, f, indent=2, sort_keys=True)
+        os.replace(tmp, settings_path)
+    except Exception:
+        pass
+
+
 # MARK: - Main
 
 def main():
+    _uninstall_if_app_gone()
+
     # 1. Parse hook stdin
     try:
         hook_input = json.load(sys.stdin)

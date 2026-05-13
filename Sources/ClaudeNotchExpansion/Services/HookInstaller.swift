@@ -27,7 +27,6 @@ final class HookInstaller {
             return // not in bundle (dev mode), skip
         }
 
-        // Ensure executable
         try FileManager.default.setAttributes(
             [.posixPermissions: NSNumber(value: 0o755)],
             ofItemAtPath: hookSrc.path
@@ -42,19 +41,16 @@ final class HookInstaller {
             return
         }
 
-        // Check if already installed
+        // Already pointing at current path — nothing to do
         if isHookInstalled(in: root, hookPath: hookPath) { return }
 
-        // Build hook entry
-        let hookEntry: [String: Any] = [
-            "type": "command",
-            "command": hookPath,
-            "timeout": 95
-        ]
-        let hookMatcher: [String: Any] = [
-            "matcher": "",
-            "hooks": [hookEntry]
-        ]
+        // Remove any stale notch hook entries (app was moved or reinstalled)
+        let hadStale = hasStaleHook(in: root)
+        root = removingStaleHooks(from: root)
+
+        // Add fresh entry for current bundle path
+        let hookEntry: [String: Any] = ["type": "command", "command": hookPath, "timeout": 95]
+        let hookMatcher: [String: Any] = ["matcher": "", "hooks": [hookEntry]]
 
         var hooks = root["hooks"] as? [String: Any] ?? [:]
         var preToolUse = hooks["PreToolUse"] as? [[String: Any]] ?? []
@@ -71,7 +67,10 @@ final class HookInstaller {
             backupItemName: nil, options: [], resultingItemURL: nil
         )
 
-        showAlert("ClaudeNotchExpansion registered a PreToolUse hook in ~/.claude/settings.json")
+        if !hadStale {
+            showAlert("ClaudeNotchExpansion registered a PreToolUse hook in ~/.claude/settings.json")
+        }
+        // Silent update when path just changed (app was moved)
     }
 
     private func isHookInstalled(in root: [String: Any], hookPath: String) -> Bool {
@@ -79,11 +78,41 @@ final class HookInstaller {
             let hooks = root["hooks"] as? [String: Any],
             let preToolUse = hooks["PreToolUse"] as? [[String: Any]]
         else { return false }
-
         return preToolUse.contains { matcher in
             guard let hooksList = matcher["hooks"] as? [[String: Any]] else { return false }
             return hooksList.contains { $0["command"] as? String == hookPath }
         }
+    }
+
+    private func hasStaleHook(in root: [String: Any]) -> Bool {
+        guard
+            let hooks = root["hooks"] as? [String: Any],
+            let preToolUse = hooks["PreToolUse"] as? [[String: Any]]
+        else { return false }
+        return preToolUse.contains { matcher in
+            guard let hooksList = matcher["hooks"] as? [[String: Any]] else { return false }
+            return hooksList.contains { entry in
+                (entry["command"] as? String ?? "").hasSuffix("/claude-notch-hook.py")
+            }
+        }
+    }
+
+    private func removingStaleHooks(from root: [String: Any]) -> [String: Any] {
+        var root = root
+        guard var hooks = root["hooks"] as? [String: Any],
+              var preToolUse = hooks["PreToolUse"] as? [[String: Any]]
+        else { return root }
+
+        preToolUse = preToolUse.filter { matcher in
+            guard let hooksList = matcher["hooks"] as? [[String: Any]] else { return true }
+            return !hooksList.contains { entry in
+                (entry["command"] as? String ?? "").hasSuffix("/claude-notch-hook.py")
+            }
+        }
+
+        hooks["PreToolUse"] = preToolUse
+        root["hooks"] = hooks
+        return root
     }
 
     // MARK: - LaunchAgent
