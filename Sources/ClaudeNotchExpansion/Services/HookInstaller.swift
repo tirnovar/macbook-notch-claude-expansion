@@ -161,9 +161,14 @@ final class HookInstaller {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Claude Notch"
-            alert.informativeText = message
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
+
+            let label = NSTextField(wrappingLabelWithString: message)
+            label.preferredMaxLayoutWidth = 380
+            label.setFrameSize(label.fittingSize)
+            alert.accessoryView = label
+
             alert.runModal()
         }
     }
