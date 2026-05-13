@@ -48,6 +48,9 @@ struct SessionBarView: View {
             )
             .fill(Color.notchBG)
         )
+        .contextMenu {
+            Button("Quit Claude Notch") { NSApplication.shared.terminate(nil) }
+        }
         .task(id: isActive) {
             guard isActive else {
                 withAnimation(.easeOut(duration: 0.3)) { pulseOpacity = 1.0 }
