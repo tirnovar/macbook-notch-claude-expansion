@@ -1,5 +1,7 @@
 # Claude Notch
 
+<img width="100" height="100" alt="clawd-notch-peek" src="https://github.com/user-attachments/assets/0f4cd58e-dcfe-4c3b-baf5-129bc10cf7c3" />
+
 A native macOS app that turns the MacBook hardware notch into a live Claude Code session monitor and permission approval UI. No Dock icon. No window switching. Just the notch.
 
 ## What it does
