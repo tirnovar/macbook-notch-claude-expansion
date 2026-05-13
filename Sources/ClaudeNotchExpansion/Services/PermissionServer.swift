@@ -134,24 +134,22 @@ actor PermissionServer {
     func submitDecision(
         requestId: String,
         decision: PermissionDecision,
-        cacheAction: CacheAction?
+        cacheAction: CacheAction?,
+        sessionId: String,
+        toolName: String,
+        toolInput: [String: AnyCodable]
     ) async {
         guard let cont = pendingContinuations.removeValue(forKey: requestId) else { return }
 
         if let cacheAction {
-            let pending = await MainActor.run {
-                AppState.shared.pendingPermissions.first { $0.id == requestId }
-            }
-            if let pending {
-                let toolKey = makeToolKey(name: pending.toolName, input: pending.toolInput)
-                switch cacheAction {
-                case .session:
-                    await SessionPermissionCache.shared.addAllowance(
-                        sessionId: pending.sessionId, toolKey: toolKey
-                    )
-                case .permanent:
-                    try? PermanentCacheManager.shared.addAllowance(toolKey: toolKey)
-                }
+            let toolKey = makeToolKey(name: toolName, input: toolInput)
+            switch cacheAction {
+            case .session:
+                await SessionPermissionCache.shared.addAllowance(
+                    sessionId: sessionId, toolKey: toolKey
+                )
+            case .permanent:
+                try? PermanentCacheManager.shared.addAllowance(toolKey: toolKey)
             }
         }
 

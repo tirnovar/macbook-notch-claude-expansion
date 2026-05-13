@@ -6,13 +6,18 @@ struct SessionBarView: View {
 
     private var isActive: Bool { appState.activeCount > 0 || appState.waitingCount > 0 }
     private var totalCount: Int { appState.sessions.filter { !$0.isTerminated }.count }
+    private var dotColor: Color {
+        if appState.waitingCount > 0 { return .claudeAmber }
+        if appState.activeCount > 0  { return .claudeAmber }
+        return .white.opacity(0.35)
+    }
 
     var body: some View {
         HStack(spacing: 0) {
             // Left of camera: session count + amber status dot
             HStack(spacing: 5) {
                 Circle()
-                    .fill(Color.claudeAmber)
+                    .fill(dotColor)
                     .frame(width: 7, height: 7)
                     .opacity(pulseOpacity)
                 Text("\(totalCount)")

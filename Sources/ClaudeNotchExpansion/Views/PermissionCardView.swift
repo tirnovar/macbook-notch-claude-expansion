@@ -128,11 +128,15 @@ struct PermissionCardView: View {
     }
 
     private func decide(_ decision: PermissionDecision, cacheAction: CacheAction?) {
+        let p = permission
         Task {
             await PermissionServer.shared.submitDecision(
-                requestId: permission.id,
+                requestId: p.id,
                 decision: decision,
-                cacheAction: cacheAction
+                cacheAction: cacheAction,
+                sessionId: p.sessionId,
+                toolName: p.toolName,
+                toolInput: p.toolInput
             )
         }
         appState.removePermission(id: permission.id)

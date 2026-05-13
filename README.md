@@ -4,21 +4,30 @@ A native macOS app that turns the MacBook notch into a live Claude Code session 
 
 ## What it does
 
-**When Claude Code is running** the notch silently expands horizontally, showing a status bar with colour-coded session dots:
+**When Claude Code is running** the notch silently expands horizontally, showing a status bar with a session count and a status dot:
 
-| Colour | Meaning |
-|--------|---------|
-| Purple | Session active (tool running) |
-| Amber  | Waiting for your permission |
-| Green  | Session finished (auto-hides in 5 s) |
+| Dot colour | Meaning |
+|------------|---------|
+| Amber (pulsing) | At least one session is actively working or waiting for your permission |
+| Gray (static)   | All sessions are idle (no activity) |
+
+Tap the chevron to open the detail panel. Each session row has its own dot:
+
+| Dot colour | Meaning |
+|------------|---------|
+| Amber   | Working (tool running) or waiting for permission |
+| Gray    | Idle — no activity for > 30 s |
+| Green   | Finished |
+
+Session rows also show an entrypoint icon and are tappable — tapping focuses the terminal, editor, or Claude Desktop app that owns the session.
 
 **When Claude Code asks for a tool permission** the notch expands vertically into a card showing the tool name, what it will do, and four buttons:
 
 | Button | Effect |
 |--------|--------|
 | Accept Once | Allows this one request, no cache |
-| Accept for Session | Allows same tool pattern for the rest of this session |
-| Accept Permanently | Writes the tool key to `~/.claude/settings.json` |
+| For Session | Allows the same tool pattern for the rest of this session |
+| Permanently | Writes the tool key to `~/.claude/settings.json` |
 | Decline | Blocks the tool call |
 
 Unanswered after 90 seconds → automatic allow (Claude Code never gets stuck).
