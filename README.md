@@ -22,21 +22,25 @@ Claude Notch solves this with zero context switches. The notch shows you what's 
 
 A small indicator lives in the notch bar. It tells you the state of every Claude Code session at a glance — no terminal, no Dock, no window management.
 
-<!-- SCREENSHOT: notch bar with amber pulsing dot — single active session -->
-<!-- Replace with: assets/notch-single-active.png -->
-
-<!-- SCREENSHOT: notch bar with green pill showing "2" — two finished sessions -->
-<!-- Replace with: assets/notch-pill-multi.png -->
+![Notch bar — 3 sessions, mixed states](assets/notch-closed-with-active-sessions.png)
 
 #### What the colors mean
 
-| Indicator | Color | State |
-|---|---|---|
-| Pulsing dot | **Amber** | At least one session is actively working or waiting for your approval |
-| Static dot | **Green** | All sessions finished — Claude is done |
-| Static dot | **Gray** | All sessions idle — no active work |
+The indicator color reflects the worst-case state across all your sessions:
 
-**One session** shows a dot. **Two or more sessions** spring-animate the dot into a pill with a count badge. When sessions close, it morphs back. Click anywhere on the bar to open the detail panel — each row shows the session, its entrypoint, and clicking it focuses the right terminal window.
+| Color | State |
+|---|---|
+| **Amber** (pulsing) | At least one session is actively working or waiting for your approval |
+| **Green** (static) | All sessions finished — Claude is done |
+| **Gray** (static) | All sessions idle — no active work |
+
+When sessions are in **mixed states** — some working, some done — the pill shows both colors simultaneously (amber + green), so you know at a glance that not everything has finished yet.
+
+**One session** shows a dot. **Two or more sessions** spring-animate the dot into a pill with a session count. Drop back to one, it morphs back. Click anywhere on the bar to open the detail panel:
+
+![Detail panel — sessions and usage](assets/notch-opened-with-active-sessions.png)
+
+Each row shows the project name, working directory, entrypoint type, elapsed time, and status. Click a row to focus the right terminal or editor window.
 
 ---
 
@@ -62,10 +66,9 @@ Walk away? After 90 seconds with no response, the call is automatically approved
 
 ### API usage at a glance
 
-<!-- SCREENSHOT: detail panel open, showing usage ring and 5h / 7d progress bars -->
-<!-- Replace with: assets/usage-panel.png -->
+The bottom of the detail panel shows your Claude API utilization in real time — 5-hour and 7-day windows, each with a reset countdown. The ring indicator in the notch bar mirrors the 5h utilization at all times.
 
-The detail panel shows your Claude API utilization — 5-hour and 7-day windows — with a reset countdown. Know before you hit a rate limit, not after.
+Know before you hit a rate limit, not after.
 
 ---
 
