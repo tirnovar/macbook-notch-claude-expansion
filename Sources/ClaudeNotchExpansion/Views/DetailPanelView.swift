@@ -249,11 +249,19 @@ private struct UsageFooterView: View {
                 }
             }
 
-            HStack {
+            HStack(spacing: 5) {
                 Spacer()
                 Text("updated \(usage.lastUpdated.formatted(.relative(presentation: .named)))")
                     .font(.system(size: 9))
                     .foregroundStyle(Color.white.opacity(0.2))
+                Button {
+                    Task { await UsageTracker.shared.fetchNow() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.3))
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
@@ -346,10 +354,11 @@ private struct LegendFooterView: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 5) {
-                    LegendGroup(title: "Dot color") {
-                        LegendItem(symbol: "circle.fill", color: .claudeAmber,             label: "working or waiting for permission")
-                        LegendItem(symbol: "circle.fill", color: .claudeGreen,             label: "done (last activity < 5 min ago)")
-                        LegendItem(symbol: "circle.fill", color: Color.white.opacity(0.35), label: "idle (no activity > 5 min)")
+                    LegendGroup(title: "Status indicator") {
+                        LegendItem(symbol: "circle.fill",       color: .claudeAmber,              label: "all sessions running")
+                        LegendItem(symbol: "circle.fill",       color: .claudeGreen,              label: "done (last activity < 5 min)")
+                        LegendItem(symbol: "circle.fill",       color: Color.white.opacity(0.35), label: "idle (no activity > 5 min)")
+                        LegendItem(symbol: "rectangle.lefthalf.filled", color: .claudeAmber,      label: "left = running, right = done/idle")
                     }
                     LegendGroup(title: "Icon") {
                         LegendItem(symbol: "terminal",      color: Color.white.opacity(0.45), label: "Claude CLI (terminal)")

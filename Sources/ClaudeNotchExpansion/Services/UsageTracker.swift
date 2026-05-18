@@ -21,6 +21,10 @@ actor UsageTracker {
         }
     }
 
+    func fetchNow() async {
+        await fetch()
+    }
+
     // MARK: - Fetch cycle
 
     private func fetch() async {

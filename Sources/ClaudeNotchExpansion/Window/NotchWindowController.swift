@@ -51,11 +51,11 @@ final class NotchWindowController: NSObject {
 
         case .horizontalBar:
             stopOutsideClickMonitor()
-            animate(to: barFrame())
-            window.ignoresMouseEvents = false  // wand/chevron is clickable
+            animate(to: barFrame(), duration: 0.25, timing: .easeIn)
+            window.ignoresMouseEvents = false
 
         case .horizontalBarWithDetail:
-            animate(to: barDetailFrame(), duration: 0.25)
+            animate(to: barDetailFrame(), duration: 0.25, timing: .easeOut)
             window.ignoresMouseEvents = false
             startOutsideClickMonitor()
 
@@ -99,10 +99,14 @@ final class NotchWindowController: NSObject {
         )
     }
 
-    private func animate(to frame: NSRect, duration: TimeInterval = 0.28) {
+    private func animate(
+        to frame: NSRect,
+        duration: TimeInterval = 0.25,
+        timing: CAMediaTimingFunctionName = .easeOut
+    ) {
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = duration
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            ctx.timingFunction = CAMediaTimingFunction(name: timing)
             ctx.allowsImplicitAnimation = true
             window.animator().setFrame(frame, display: true)
         }

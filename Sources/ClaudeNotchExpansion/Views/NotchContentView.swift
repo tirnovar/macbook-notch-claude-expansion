@@ -45,7 +45,7 @@ struct NotchContentView: View {
                         .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
                 }
             }
-            .animation(.easeOut(duration: 0.22), value: appState.isDetailOpen)
+            .animation(.easeOut(duration: 0.25), value: appState.isDetailOpen)
             .transition(.scale(scale: 0.85, anchor: .top).combined(with: .opacity))
 
         case .permissionCard(let permission):
