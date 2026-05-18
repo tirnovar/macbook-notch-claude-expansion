@@ -209,11 +209,23 @@ private func socketAcceptLoop(server: PermissionServer) {
             bind(serverFD, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
         }
     }
-    guard bindResult == 0, listen(serverFD, 32) == 0 else { return }
+    guard bindResult == 0 else { return }
+    // Restrict socket access to the owner only before any client can connect
+    chmod(path, 0o600)
+    guard listen(serverFD, 32) == 0 else { return }
 
     while true {
         let clientFD = accept(serverFD, nil, nil)
         guard clientFD >= 0 else { continue }
+
+        // Verify the connecting process belongs to the same user — reject anything else
+        var peerUID: uid_t = 0
+        var peerGID: gid_t = 0
+        guard getpeereid(clientFD, &peerUID, &peerGID) == 0, peerUID == getuid() else {
+            close(clientFD)
+            continue
+        }
+
         DispatchQueue(label: "notch.socket.client", qos: .utility, attributes: .concurrent).async {
             handleConnection(clientFD: clientFD, server: server)
         }
