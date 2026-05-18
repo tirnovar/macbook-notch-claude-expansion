@@ -4,7 +4,7 @@
 
 **Claude Code session monitor and permission UI — living in the only screen real estate your MacBook was wasting.**
 
-The hardware notch exists. It's always visible. Claude Notch puts it to work: live session status, permission approvals, and API usage — all without switching windows or touching the terminal.
+The hardware notch exists. It's always visible. Claude Notch puts it to work: live session status and API usage — all without switching windows or touching the terminal.
 
 ---
 
@@ -12,7 +12,7 @@ The hardware notch exists. It's always visible. Claude Notch puts it to work: li
 
 You're deep in your editor. Claude Code is running somewhere in the background — maybe working, maybe blocked waiting for you to approve a tool call, maybe already done. You have no idea without switching focus.
 
-Claude Notch solves this with zero context switches. The notch shows you what's happening. You approve or deny from there. You never leave your editor.
+Claude Notch solves this with zero context switches. The notch shows you what's happening. You never leave your editor.
 
 ---
 
@@ -41,26 +41,6 @@ When sessions are in **mixed states** — some working, some done — the pill s
 ![Detail panel — sessions and usage](assets/notch-opened-with-active-sessions.png)
 
 Each row shows the project name, working directory, entrypoint type, elapsed time, and status. Click a row to focus the right terminal or editor window.
-
----
-
-### Permission approvals without leaving your editor
-
-When Claude Code needs to run a tool — write a file, execute a shell command, call an API — it asks first. Normally, that means hunting for the right terminal tab. With Claude Notch, the notch expands downward into a permission card.
-
-<!-- SCREENSHOT: permission card expanded below the notch — tool name, command preview, four action buttons -->
-<!-- Replace with: assets/permission-card.png -->
-
-Four choices, always visible:
-
-| Action | What it does |
-|---|---|
-| **Accept Once** | Approves this specific call, nothing else |
-| **For Session** | Approves the same tool pattern for the rest of this session |
-| **Permanently** | Writes the pattern to `~/.claude/settings.json` — never asked again |
-| **Decline** | Blocks the call |
-
-Walk away? After 90 seconds with no response, the call is automatically approved. Claude Code never gets stuck waiting on you.
 
 ---
 
