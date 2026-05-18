@@ -4,6 +4,7 @@ struct ClaudeUsage: Equatable {
     var fiveHourPct: Double
     var fiveHourResetAt: Date?
     var sevenDayPct: Double
+    var sevenDayResetAt: Date?
     var opusPct: Double
     var costUsed: Double?
     var costLimit: Double?

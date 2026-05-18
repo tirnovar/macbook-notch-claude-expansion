@@ -70,12 +70,11 @@ actor UsageTracker {
         let headers = http.allHeaderFields
         logger.debug("headers: \(headers.keys.filter { ($0 as? String)?.contains("ratelimit") == true })")
 
-        let fiveHourPct  = utilization(headers["anthropic-ratelimit-unified-5h-utilization"])
-        let sevenDayPct  = utilization(headers["anthropic-ratelimit-unified-7d-utilization"])
+        let fiveHourPct   = utilization(headers["anthropic-ratelimit-unified-5h-utilization"])
+        let sevenDayPct   = utilization(headers["anthropic-ratelimit-unified-7d-utilization"])
         let fiveHourReset = resetDate(headers["anthropic-ratelimit-unified-5h-reset"])
         let sevenDayReset = resetDate(headers["anthropic-ratelimit-unified-7d-reset"])
-
-        _ = sevenDayReset // stored for potential future use
+        logger.debug("5h reset=\(String(describing: fiveHourReset)) 7d reset=\(String(describing: sevenDayReset))")
 
         guard fiveHourPct > 0 || sevenDayPct > 0 else {
             logger.debug("no utilization headers in response — plan may not support it")
@@ -86,6 +85,7 @@ actor UsageTracker {
             fiveHourPct:     fiveHourPct,
             fiveHourResetAt: fiveHourReset,
             sevenDayPct:     sevenDayPct,
+            sevenDayResetAt: sevenDayReset,
             opusPct:         0,
             costUsed:        nil,
             costLimit:       nil,
@@ -102,7 +102,19 @@ actor UsageTracker {
 
     private func resetDate(_ raw: Any?) -> Date? {
         guard let str = raw as? String else { return nil }
-        return ISO8601DateFormatter().date(from: str)
+        logger.debug("reset header raw value: \(str)")
+        let fmt = ISO8601DateFormatter()
+        // Try most specific first: fractional seconds + offset
+        for options: ISO8601DateFormatter.Options in [
+            [.withInternetDateTime, .withFractionalSeconds],
+            [.withInternetDateTime],
+            [.withFullDate, .withTime, .withColonSeparatorInTime, .withTimeZone],
+        ] {
+            fmt.formatOptions = options
+            if let d = fmt.date(from: str) { return d }
+        }
+        logger.debug("reset date parse failed for: \(str)")
+        return nil
     }
 
     // MARK: - Credentials (Keychain primary, file fallback)

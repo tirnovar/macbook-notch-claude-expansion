@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.$notchExpansionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                Task { @MainActor [weak self] in
+                MainActor.assumeIsolated {
                     self?.notchController?.transition(to: state)
                 }
             }

@@ -231,10 +231,10 @@ private struct UsageFooterView: View {
                 .tracking(0.8)
 
             UsageBarRow(label: "5h window", pct: usage.fiveHourPct, resetAt: usage.fiveHourResetAt)
-            UsageBarRow(label: "7-day", pct: usage.sevenDayPct, resetAt: nil)
+            UsageBarRow(label: "7-day",     pct: usage.sevenDayPct, resetAt: usage.sevenDayResetAt)
 
             if usage.opusPct > 0 {
-                UsageBarRow(label: "Opus 7d", pct: usage.opusPct, resetAt: nil)
+                UsageBarRow(label: "Opus 7d", pct: usage.opusPct, resetAt: usage.sevenDayResetAt)
             }
 
             if let used = usage.costUsed, let limit = usage.costLimit {

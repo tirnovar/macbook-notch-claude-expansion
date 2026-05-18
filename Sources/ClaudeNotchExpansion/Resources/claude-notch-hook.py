@@ -15,8 +15,17 @@ import re
 import time
 
 SOCKET_PATH = "/tmp/claude-notch-monitor.sock"
+CONFIG_PATH  = "/tmp/claude-notch-config.json"
 CONNECT_TIMEOUT = 2.0   # seconds to wait for the app to accept connection
-RESPONSE_TIMEOUT = 90.0 # seconds to wait for user decision (allow on timeout)
+
+def _load_response_timeout():
+    try:
+        with open(CONFIG_PATH) as f:
+            return float(json.load(f).get("response_timeout", 90.0))
+    except Exception:
+        return 90.0
+
+RESPONSE_TIMEOUT = _load_response_timeout()
 
 
 # MARK: - Framing helpers

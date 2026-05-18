@@ -117,7 +117,7 @@ final class NotchWindowController: NSObject {
     private func startOutsideClickMonitor() {
         guard globalClickMonitor == nil else { return }
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
-            Task { @MainActor in AppState.shared.closeDetail() }
+            MainActor.assumeIsolated { AppState.shared.closeDetail() }
         }
     }
 

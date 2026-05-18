@@ -45,17 +45,30 @@ actor PermissionServer {
 
     private init() {}
 
+    static let configPath = "/tmp/claude-notch-config.json"
+
     func start() async {
         try? FileManager.default.removeItem(atPath: Self.socketPath)
-        // Socket server runs entirely on background OS threads — never touches actor executor
+        writeConfig()
         DispatchQueue(label: "notch.socket.accept", qos: .utility).async {
             socketAcceptLoop(server: self)
         }
     }
 
+    // Write hook-readable config so Python can match our timeout setting
+    private func writeConfig() {
+        let config: [String: Any] = ["response_timeout": Self.timeoutSeconds()]
+        guard let data = try? JSONSerialization.data(withJSONObject: config) else { return }
+        try? data.write(to: URL(fileURLWithPath: Self.configPath), options: .atomic)
+    }
+
     // MARK: - Called by socket background thread to get a decision
 
     func processRequest(_ request: PermissionRequestMessage) async -> PermissionResponseMessage {
+        defer {
+            Task { @MainActor in AppState.shared.removePermission(id: request.requestId) }
+        }
+
         await SessionMonitor.shared.markWaiting(
             sessionId: request.sessionId,
             requestId: request.requestId
