@@ -30,9 +30,9 @@ private struct UsagePillView: View {
     }
 }
 
-// MARK: - Session status pill
-// Capsule with a hard gradient stop: leading = running state, trailing = done/idle state.
-// Wider than a dot so the split is actually legible.
+// MARK: - Session status indicator
+// Single session → dot (7×7). Multiple sessions → pill (22×7).
+// Capsule animates between the two shapes via spring on width change.
 
 private struct SessionStatusIndicator: View {
     let sessions: [ClaudeSession]
@@ -59,6 +59,7 @@ private struct SessionStatusIndicator: View {
     private var hasDone:    Bool { sessions.contains { category($0) == .done    } }
     private var isSplit:    Bool { hasRunning && sessions.contains { category($0) != .running } }
     private var isActive:   Bool { hasRunning }
+    private var isDot:      Bool { sessions.count <= 1 }
 
     private var solidColor: Color {
         if hasRunning { return .claudeAmber }
@@ -66,16 +67,19 @@ private struct SessionStatusIndicator: View {
         return .white.opacity(0.35)
     }
 
-    // Trailing (right) half: green if any session is "done", grey if all idle
     private var trailingColor: Color { hasDone ? .claudeGreen : .white.opacity(0.35) }
+
+    // Dot = 7 (circle), pill = 22. Capsule shape morphs via spring animation.
+    private var indicatorWidth: CGFloat { isDot ? 7 : 22 }
 
     // MARK: Body
 
     var body: some View {
         Capsule()
             .fill(fill)
-            .frame(width: 22, height: 7)
+            .frame(width: indicatorWidth, height: 7)
             .opacity(pulseOpacity)
+            .animation(.spring(response: 0.4, dampingFraction: 0.72), value: indicatorWidth)
             .animation(.easeInOut(duration: 0.35), value: isSplit)
             .onReceive(colorTimer) { _ in tick += 1 }
             .task(id: isActive) {
@@ -93,7 +97,8 @@ private struct SessionStatusIndicator: View {
             }
     }
 
-    // Hard stop at 0.5 — leading = orange (running), trailing = done/idle
+    // Hard stop at 0.5 — leading = orange (running), trailing = done/idle.
+    // In dot mode isSplit is always false (only one session), so solidColor is used.
     private var fill: AnyShapeStyle {
         if isSplit {
             AnyShapeStyle(LinearGradient(
@@ -123,13 +128,17 @@ struct SessionBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: status pill + session count
+            // Left: status dot/pill + session count (count hidden for single session)
             HStack(spacing: 5) {
                 SessionStatusIndicator(sessions: activeSessions)
-                Text("\(totalCount)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.55))
+                if totalCount > 1 {
+                    Text("\(totalCount)")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                        .transition(.opacity.combined(with: .scale(scale: 0.7)))
+                }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.72), value: totalCount > 1)
             .padding(.leading, 14)
 
             Spacer()
