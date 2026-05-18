@@ -8,14 +8,20 @@ A native macOS app that turns the MacBook hardware notch into a live Claude Code
 
 ### Status bar
 
-Whenever a Claude Code session is running, the notch silently expands horizontally, showing a session count and a status dot:
+Whenever a Claude Code session is running, the notch silently expands horizontally:
 
-| Dot colour | Meaning |
+- **One session** — a small coloured dot appears in the notch
+- **Two or more sessions** — the dot spring-animates into a wider pill; a session count appears next to it
+
+| Indicator colour | Meaning |
 |---|---|
 | Amber (pulsing) | At least one session is actively working or waiting for permission |
+| Green (static) | All sessions finished recently |
 | Gray (static) | All sessions are idle |
 
-Click the chevron to open the detail panel — each session row has its own dot, an entrypoint icon, and is clickable (focuses the terminal, editor, or Claude Desktop that owns the session).
+When a second session starts, the dot smoothly expands into the pill. When it drops back to one session, the pill shrinks back into a dot — both transitions use a spring animation.
+
+Click anywhere on the bar to open the detail panel — each session row has its own dot, an entrypoint icon, and is clickable (focuses the terminal, editor, or Claude Desktop that owns the session).
 
 | Dot colour | Session state |
 |---|---|
