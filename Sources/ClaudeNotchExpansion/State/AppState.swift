@@ -26,6 +26,7 @@ final class AppState: ObservableObject {
     @Published var pendingPermissions: [PendingPermission] = []
     @Published var notchExpansionState: NotchExpansionState = .collapsed
     @Published private(set) var isDetailOpen = false
+    @Published var usage: ClaudeUsage?
 
     private init() {}
 

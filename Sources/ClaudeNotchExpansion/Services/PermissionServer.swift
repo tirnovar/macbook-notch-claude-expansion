@@ -90,20 +90,19 @@ actor PermissionServer {
         // Show permission card on main thread
         await MainActor.run { AppState.shared.addPermission(pending) }
 
-        // Wait for UI decision (or 90s timeout → allow)
+        // Wait for UI decision — duration and fallback decision are user-configurable
         let response: PermissionResponseMessage
         do {
             let reqId = request.requestId
-            response = try await withTimeout(seconds: 90) {
+            response = try await withTimeout(seconds: Self.timeoutSeconds()) {
                 try await withCheckedThrowingContinuation { continuation in
-                    // Task hops back to actor to register continuation
                     Task { await self.registerContinuation(id: reqId, cont: continuation) }
                 }
             } fallback: {
                 PermissionResponseMessage(
                     messageType: "permission_response",
                     requestId: request.requestId,
-                    decision: .allow,
+                    decision: Self.timeoutDecision(),
                     cacheAction: nil,
                     reason: "timeout"
                 )
@@ -120,6 +119,19 @@ actor PermissionServer {
 
         await SessionMonitor.shared.markActive(sessionId: request.sessionId)
         return response
+    }
+
+    // MARK: - Timeout configuration (reads UserDefaults — safe to call off-actor)
+
+    static func timeoutSeconds() -> Double {
+        switch UserDefaults.standard.string(forKey: "permissionTimeoutAction") ?? "wait" {
+        case "wait": return 86400   // 24 h — effectively no timeout
+        default:     return 90
+        }
+    }
+
+    static func timeoutDecision() -> PermissionDecision {
+        UserDefaults.standard.string(forKey: "permissionTimeoutAction") == "deny" ? .deny : .allow
     }
 
     private func registerContinuation(
@@ -211,7 +223,10 @@ private func handleConnection(clientFD: Int32, server: PermissionServer) {
         sema.signal()
     }
 
-    _ = sema.wait(timeout: .now() + 92)
+    let socketDeadline: DispatchTime = PermissionServer.timeoutSeconds() > 200
+        ? .distantFuture
+        : .now() + PermissionServer.timeoutSeconds() + 2
+    _ = sema.wait(timeout: socketDeadline)
 
     if let response, let _ = try? writeFramed(fd: clientFD, message: response) { }
 }

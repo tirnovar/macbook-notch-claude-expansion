@@ -5,9 +5,9 @@ final class NotchWindowController: NSObject {
     private var window: NSWindow!
 
     private let notchW: CGFloat       = 198
-    private let barNarrowW: CGFloat   = 278  // collapsed bar — ~5pt gap between content and notch edge
-    private let barW: CGFloat         = 360  // expanded width for detail panel
-    private let detailBelowH: CGFloat = 260
+    private let barNarrowW: CGFloat   = 320  // bar — 61pt gap each side clears ring+chevron
+    private let barW: CGFloat         = 420  // expanded detail panel
+    private let detailBelowH: CGFloat = 310
     private let cardW: CGFloat       = 460
     private let cardBelowH: CGFloat  = 224
 
@@ -81,11 +81,10 @@ final class NotchWindowController: NSObject {
 
     private func barDetailFrame() -> NSRect {
         let s = screen.frame
-        // Same x and width as barFrame — only y and height change, no horizontal movement
         return NSRect(
-            x: s.midX - barNarrowW / 2,
+            x: s.midX - barW / 2,
             y: notchAreaY - detailBelowH,
-            width: barNarrowW,
+            width: barW,
             height: notchAreaHeight + detailBelowH
         )
     }

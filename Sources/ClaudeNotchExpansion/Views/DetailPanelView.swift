@@ -30,6 +30,10 @@ struct DetailPanelView: View {
             }
 
             Divider().overlay(Color.white.opacity(0.07))
+            if let usage = appState.usage {
+                UsageFooterView(usage: usage)
+                Divider().overlay(Color.white.opacity(0.07))
+            }
             LegendFooterView()
         }
         .padding(.vertical, 6)
@@ -51,14 +55,17 @@ struct DetailPanelView: View {
 private struct SessionRowView: View {
     let session: ClaudeSession
     @State private var elapsed: TimeInterval = 0
-    private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+    private let timer = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
     @State private var isHovered = false
 
     private var stateColor: Color {
         switch session.state {
         case .active:               return .claudeAmber
         case .waitingForPermission: return .claudeAmber
-        case .idle:                 return Color.white.opacity(0.35)
+        case .idle:
+            return Date().timeIntervalSince(session.lastActivityAt) < 300
+                ? .claudeGreen
+                : Color.white.opacity(0.35)
         case .finished:             return .claudeGreen
         }
     }
@@ -67,7 +74,8 @@ private struct SessionRowView: View {
         switch session.state {
         case .active:               return "working"
         case .waitingForPermission: return "waiting"
-        case .idle:                 return "idle"
+        case .idle:
+            return Date().timeIntervalSince(session.lastActivityAt) < 300 ? "done" : "idle"
         case .finished:             return "done"
         }
     }
@@ -130,6 +138,51 @@ private struct SessionRowView: View {
         .onReceive(timer) { _ in elapsed = Date().timeIntervalSince(session.startedAt) }
     }
 
+    // Walk the process tree from the session PID upward, find the owning terminal app,
+    // and activate it. Falls back to opening a new terminal window if nothing is found.
+    private func focusTerminalSession(_ session: ClaudeSession) {
+        let terminalBundleIds: Set<String> = [
+            "com.apple.Terminal",
+            "com.googlecode.iterm2",
+            "dev.warp.desktop",
+            "com.github.wez.wezterm",
+            "net.kovidgoyal.kitty",
+            "co.zeit.hyper",
+        ]
+
+        var pid = session.pid
+        for _ in 0..<10 {
+            guard let ppid = parentPID(of: pid), ppid > 1 else { break }
+            if let app = NSRunningApplication(processIdentifier: ppid),
+               let bundleId = app.bundleIdentifier,
+               terminalBundleIds.contains(bundleId) {
+                app.activate(options: .activateIgnoringOtherApps)
+                return
+            }
+            pid = ppid
+        }
+        // Fallback: couldn't find the owning terminal, open new window
+        openNewTerminalAt(session.cwd)
+    }
+
+    private func parentPID(of pid: Int32) -> Int32? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let ppid = info.kp_eproc.e_ppid
+        return ppid > 0 ? ppid : nil
+    }
+
+    private func openNewTerminalAt(_ cwd: String) {
+        let p = Process()
+        p.launchPath = "/usr/bin/open"
+        p.arguments = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.googlecode.iterm2"
+        ) != nil ? ["-a", "iTerm", cwd] : ["-a", "Terminal", cwd]
+        try? p.run()
+    }
+
     private func focusSession(_ session: ClaudeSession) {
         AppState.shared.closeDetail()
 
@@ -160,8 +213,110 @@ private struct SessionRowView: View {
             }
 
         default:
-            NSWorkspace.shared.open(URL(fileURLWithPath: session.cwd))
+            focusTerminalSession(session)
         }
+    }
+}
+
+// MARK: - Usage footer
+
+private struct UsageFooterView: View {
+    let usage: ClaudeUsage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("USAGE")
+                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.25))
+                .tracking(0.8)
+
+            UsageBarRow(label: "5h window", pct: usage.fiveHourPct, resetAt: usage.fiveHourResetAt)
+            UsageBarRow(label: "7-day", pct: usage.sevenDayPct, resetAt: nil)
+
+            if usage.opusPct > 0 {
+                UsageBarRow(label: "Opus 7d", pct: usage.opusPct, resetAt: nil)
+            }
+
+            if let used = usage.costUsed, let limit = usage.costLimit {
+                HStack(spacing: 4) {
+                    Text("Overage")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.white.opacity(0.5))
+                    Spacer()
+                    Text("$\(String(format: "%.2f", used)) / $\(String(format: "%.2f", limit))")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(used > 0 ? Color.claudeAmber : Color.white.opacity(0.38))
+                }
+            }
+
+            HStack {
+                Spacer()
+                Text("updated \(usage.lastUpdated.formatted(.relative(presentation: .named)))")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.white.opacity(0.2))
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct UsageBarRow: View {
+    let label: String
+    let pct: Double
+    let resetAt: Date?
+
+    @State private var now = Date()
+    private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+
+    private var barColor: Color {
+        switch pct {
+        case ..<50:  return .claudeGreen
+        case 50..<80: return .claudeAmber
+        default:     return .claudeRed
+        }
+    }
+
+    private var resetLabel: String? {
+        guard let resetAt else { return nil }
+        let remaining = resetAt.timeIntervalSince(now)
+        guard remaining > 0 else { return nil }
+        let mins = Int(remaining / 60)
+        if mins < 60 { return "resets \(mins)m" }
+        return "resets \(mins / 60)h\((mins % 60) > 0 ? " \(mins % 60)m" : "")"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.white.opacity(0.5))
+                Spacer()
+                if let reset = resetLabel {
+                    Text(reset)
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.white.opacity(0.28))
+                }
+                Text("\(Int(pct.rounded()))%")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(barColor)
+                    .frame(minWidth: 30, alignment: .trailing)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(height: 3)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(barColor.opacity(0.85))
+                        .frame(width: geo.size.width * CGFloat(min(pct / 100, 1)), height: 3)
+                        .animation(.easeInOut(duration: 0.4), value: pct)
+                }
+            }
+            .frame(height: 3)
+        }
+        .onReceive(timer) { now = $0 }
     }
 }
 
@@ -172,7 +327,10 @@ private struct LegendFooterView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(alignment: .center) {
+                Text("Right-click bar for settings")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.white.opacity(0.2))
                 Spacer()
                 Button {
                     withAnimation(.easeOut(duration: 0.18)) { isExpanded.toggle() }
@@ -189,9 +347,9 @@ private struct LegendFooterView: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: 5) {
                     LegendGroup(title: "Dot color") {
-                        LegendItem(symbol: "circle.fill", color: .claudeAmber,        label: "working or waiting for permission")
-                        LegendItem(symbol: "circle.fill", color: Color.white.opacity(0.35), label: "idle (no activity > 30 s)")
-                        LegendItem(symbol: "circle.fill", color: .claudeGreen,        label: "finished")
+                        LegendItem(symbol: "circle.fill", color: .claudeAmber,             label: "working or waiting for permission")
+                        LegendItem(symbol: "circle.fill", color: .claudeGreen,             label: "done (last activity < 5 min ago)")
+                        LegendItem(symbol: "circle.fill", color: Color.white.opacity(0.35), label: "idle (no activity > 5 min)")
                     }
                     LegendGroup(title: "Icon") {
                         LegendItem(symbol: "terminal",      color: Color.white.opacity(0.45), label: "Claude CLI (terminal)")

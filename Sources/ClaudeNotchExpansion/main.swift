@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try? HookInstaller.shared.installIfNeeded()
             await SessionMonitor.shared.start()
             await PermissionServer.shared.start()
+            await UsageTracker.shared.start()
         }
 
         AppState.shared.$notchExpansionState
