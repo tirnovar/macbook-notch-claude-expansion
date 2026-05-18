@@ -26,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default
+            .publisher(for: NSApplication.didChangeScreenParametersNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.notchController?.reframe() }
+            }
+            .store(in: &cancellables)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

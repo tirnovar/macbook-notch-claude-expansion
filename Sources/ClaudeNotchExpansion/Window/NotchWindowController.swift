@@ -42,6 +42,15 @@ final class NotchWindowController: NSObject {
         window.orderFrontRegardless()
     }
 
+    @MainActor func reframe() {
+        switch AppState.shared.notchExpansionState {
+        case .collapsed:               window.setFrame(notchFrame(), display: true)
+        case .horizontalBar:           window.setFrame(barFrame(), display: true)
+        case .horizontalBarWithDetail: window.setFrame(barDetailFrame(), display: true)
+        case .permissionCard:          window.setFrame(cardFrame(), display: true)
+        }
+    }
+
     @MainActor func transition(to state: NotchExpansionState) {
         switch state {
         case .collapsed:

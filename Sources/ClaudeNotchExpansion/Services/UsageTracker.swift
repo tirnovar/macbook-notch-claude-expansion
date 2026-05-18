@@ -103,8 +103,11 @@ actor UsageTracker {
     private func resetDate(_ raw: Any?) -> Date? {
         guard let str = raw as? String else { return nil }
         logger.debug("reset header raw value: \(str)")
+        // Anthropic returns Unix timestamps for rate-limit reset times
+        if let ts = TimeInterval(str), ts > 1_000_000_000 {
+            return Date(timeIntervalSince1970: ts)
+        }
         let fmt = ISO8601DateFormatter()
-        // Try most specific first: fractional seconds + offset
         for options: ISO8601DateFormatter.Options in [
             [.withInternetDateTime, .withFractionalSeconds],
             [.withInternetDateTime],
