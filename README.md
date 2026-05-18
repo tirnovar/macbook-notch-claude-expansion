@@ -6,9 +6,7 @@
 
 ---
 
-<!-- HERO IMAGE: composite screenshot showing the MacBook notch expanded with the app active -->
-<!-- Recommended: 1400×700 px, macOS dark mode, notch highlighted with glow -->
-<!-- ![Claude Notch hero](assets/hero.png) -->
+![Claude Notch hero](assets/clawd-notch-banner.svg)
 
 ## The problem
 
