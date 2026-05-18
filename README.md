@@ -1,3 +1,5 @@
+![Claude Notch hero](assets/clawd-notch-banner.svg)
+
 # Claude Notch
 
 <img width="100" height="100" alt="clawd-notch-peek" src="https://github.com/user-attachments/assets/0f4cd58e-dcfe-4c3b-baf5-129bc10cf7c3" />
@@ -5,8 +7,6 @@
 **Turn the MacBook notch into a live Claude Code monitor and permission UI — no Dock icon, no window switching.**
 
 ---
-
-![Claude Notch hero](assets/clawd-notch-banner.svg)
 
 ## The problem
 
