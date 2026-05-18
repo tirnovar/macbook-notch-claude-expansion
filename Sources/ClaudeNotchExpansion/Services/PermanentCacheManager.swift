@@ -31,10 +31,13 @@ final class PermanentCacheManager {
 
         var permissions = root["permissions"] as? [String: Any] ?? [:]
         var allow = permissions["allow"] as? [String] ?? []
+        var ask   = permissions["ask"]   as? [String] ?? []
 
         guard !allow.contains(toolKey) else { return }
         allow.append(toolKey)
+        ask.removeAll { $0 == toolKey }
         permissions["allow"] = allow
+        permissions["ask"]   = ask
         root["permissions"] = permissions
 
         let updated = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])

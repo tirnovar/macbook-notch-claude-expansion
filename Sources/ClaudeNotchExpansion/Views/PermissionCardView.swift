@@ -102,10 +102,10 @@ struct PermissionCardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             UnevenRoundedRectangle(
-                topLeadingRadius: 0,
+                topLeadingRadius: 10,
                 bottomLeadingRadius: 18,
                 bottomTrailingRadius: 18,
-                topTrailingRadius: 0,
+                topTrailingRadius: 10,
                 style: .continuous
             )
             .fill(Color.notchBG)

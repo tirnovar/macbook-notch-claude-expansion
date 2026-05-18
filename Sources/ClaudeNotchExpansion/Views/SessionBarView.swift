@@ -159,10 +159,10 @@ struct SessionBarView: View {
         .onTapGesture { appState.toggleDetail() }
         .background(
             UnevenRoundedRectangle(
-                topLeadingRadius: 0,
+                topLeadingRadius: 10,
                 bottomLeadingRadius: appState.isDetailOpen ? 0 : 14,
                 bottomTrailingRadius: appState.isDetailOpen ? 0 : 14,
-                topTrailingRadius: 0,
+                topTrailingRadius: 10,
                 style: .continuous
             )
             .fill(Color.notchBG)
