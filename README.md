@@ -2,65 +2,88 @@
 
 # Claude Notch
 
-<img width="100" height="100" alt="clawd-notch-peek" src="https://github.com/user-attachments/assets/0f4cd58e-dcfe-4c3b-baf5-129bc10cf7c3" />
+**Claude Code session monitor and permission UI — living in the only screen real estate your MacBook was wasting.**
 
-**Turn the MacBook notch into a live Claude Code monitor and permission UI — no Dock icon, no window switching.**
+The hardware notch exists. It's always visible. Claude Notch puts it to work: live session status, permission approvals, and API usage — all without switching windows or touching the terminal.
 
 ---
 
-## The problem
+## Why it exists
 
-Claude Code runs in the terminal, but approvals and session status live there too. Switching focus to check whether a tool call is waiting for permission, or whether a long job is still running, breaks flow — especially across multiple concurrent sessions.
+You're deep in your editor. Claude Code is running somewhere in the background — maybe working, maybe blocked waiting for you to approve a tool call, maybe already done. You have no idea without switching focus.
 
-Claude Notch moves all of that into the one piece of screen real estate that's always visible and otherwise wasted: the hardware notch.
+Claude Notch solves this with zero context switches. The notch shows you what's happening. You approve or deny from there. You never leave your editor.
 
-## Session monitor
+---
 
-The notch silently expands to show session state. You stay in your editor.
+## What you get
 
-<!-- SCREENSHOT: notch with single amber dot (active session) -->
-<!-- ![Single active session — amber dot](assets/notch-single-active.png) -->
+### Always-visible session status
 
-<!-- SCREENSHOT: notch with pill showing "2" (multiple sessions) -->
-<!-- ![Multiple sessions — pill indicator](assets/notch-pill-multi.png) -->
+A small indicator lives in the notch bar. It tells you the state of every Claude Code session at a glance — no terminal, no Dock, no window management.
 
-| Indicator | Meaning |
+![Notch bar — 3 sessions, mixed states](assets/notch-closed-with-active-sessions.png)
+
+#### What the colors mean
+
+The indicator color reflects the worst-case state across all your sessions:
+
+| Color | State |
 |---|---|
-| Amber dot (pulsing) | At least one session is working or waiting for permission |
-| Green dot (static) | All sessions finished recently |
-| Gray dot (static) | All sessions are idle |
+| **Amber** (pulsing) | At least one session is actively working or waiting for your approval |
+| **Green** (static) | All sessions finished — Claude is done |
+| **Gray** (static) | All sessions idle — no active work |
 
-**One session** → dot. **Two or more** → the dot spring-animates into a pill with a session count. When it drops back to one, the pill shrinks back. Click anywhere on the bar to open the detail panel — each row shows session state, entrypoint icon, and focuses the right terminal or editor on click.
+When sessions are in **mixed states** — some working, some done — the pill shows both colors simultaneously (amber + green), so you know at a glance that not everything has finished yet.
 
-## Permission card
+**One session** shows a dot. **Two or more sessions** spring-animate the dot into a pill with a session count. Drop back to one, it morphs back. Click anywhere on the bar to open the detail panel:
 
-When Claude Code needs approval for a tool call, the notch expands downward into a card. No terminal hunting required.
+![Detail panel — sessions and usage](assets/notch-opened-with-active-sessions.png)
 
-<!-- SCREENSHOT: permission card expanded in the notch — show tool name, command preview, and the four buttons -->
-<!-- ![Permission card](assets/permission-card.png) -->
+Each row shows the project name, working directory, entrypoint type, elapsed time, and status. Click a row to focus the right terminal or editor window.
 
-| Button | Effect |
+---
+
+### Permission approvals without leaving your editor
+
+When Claude Code needs to run a tool — write a file, execute a shell command, call an API — it asks first. Normally, that means hunting for the right terminal tab. With Claude Notch, the notch expands downward into a permission card.
+
+![Permission card](assets/notch-permission-request.png)
+
+Four choices, always visible:
+
+| Action | What it does |
 |---|---|
-| **Accept Once** | Allows this one call |
-| **For Session** | Allows the same tool pattern for the rest of this session |
-| **Permanently** | Writes the pattern to `~/.claude/settings.json` |
+| **Accept Once** | Approves this specific call, nothing else |
+| **For Session** | Approves the same tool pattern for the rest of this session |
+| **Permanently** | Writes the pattern to `~/.claude/settings.json` — never asked again |
 | **Decline** | Blocks the call |
 
-No response after 90 seconds → automatic allow. Claude Code never gets stuck waiting.
+Walk away? After 90 seconds with no response, the call is automatically approved. Claude Code never gets stuck waiting on you.
+
+---
+
+### API usage at a glance
+
+The bottom of the detail panel shows your Claude API utilization in real time — 5-hour and 7-day windows, each with a reset countdown. The ring indicator in the notch bar mirrors the 5h utilization at all times.
+
+Know before you hit a rate limit, not after.
+
+---
 
 ## Installation
 
 ### Download (recommended)
 
-1. Go to [Releases](../../releases) and download `ClaudeNotchExpansion.app.zip`
+1. Go to [**Releases**](../../releases) and download `ClaudeNotchExpansion.app.zip`
 2. Unzip → move `ClaudeNotchExpansion.app` to `/Applications/`
 3. Launch the app
 
-On first launch the app:
+On first launch, Claude Notch automatically:
 - Registers a `PreToolUse` hook in `~/.claude/settings.json`
-- Installs a LaunchAgent (`KeepAlive=true`) so it starts at login and restarts after crashes
+- Installs a LaunchAgent so it starts at login and self-restarts after crashes
 
-If you move the `.app` later, the hook and LaunchAgent paths update automatically on next launch.
+If you move the `.app` later, both the hook and LaunchAgent paths update automatically on next launch.
 
 ### Build from source
 
@@ -74,17 +97,30 @@ cp -r .build/ClaudeNotchExpansion.app /Applications/
 open /Applications/ClaudeNotchExpansion.app
 ```
 
+---
+
+## Requirements
+
+- macOS 14.0 (Sonoma) or later
+- MacBook with hardware notch (MacBook Pro 2021+, MacBook Air M2+)
+- Python 3 (ships with macOS — used by the hook script)
+- Swift 5.10+ (build from source only)
+
+---
+
 ## Testing without a live Claude Code session
 
 ```bash
 # Simulate a permission request (app must be running)
 make test-hook
 
-# Fake session file so the status bar appears; Ctrl+C removes it
+# Fake a session file so the status bar appears; Ctrl+C removes it
 make test-session
 ```
 
-## Architecture
+---
+
+## How it works under the hood
 
 ```
 ~/.claude/sessions/{pid}.json  ──FSEvents──►  SessionMonitor (actor)
@@ -100,32 +136,16 @@ PreToolUse hook (Python) ──Unix socket──►  PermissionServer (actor)
                                             SwiftUI Views
 ```
 
-**IPC:** Unix domain socket `/tmp/claude-notch-monitor.sock`, 4-byte big-endian length-prefixed JSON. One request per connection, hook blocks until the app responds.
+**IPC:** Unix domain socket at `/tmp/claude-notch-monitor.sock`, 4-byte big-endian length-prefixed JSON. One request per connection; the hook blocks until the app responds or times out.
 
-**Session detection:** FSEvents on `~/.claude/sessions/`. Each Claude Code process writes `{pid}.json`. Liveness validated via `kill(pid, 0)`, rechecked every 30 s.
+**Session detection:** FSEvents watches `~/.claude/sessions/`. Each Claude Code process writes `{pid}.json`. Liveness is validated via `kill(pid, 0)`, rechecked every 30 s.
 
 **Permission cache (three levels):**
-- *Accept Once* — no cache
-- *For Session* — in-process dict + `/tmp/claude-notch-session-{id}.json`
+- *Accept Once* — no cache, single approval
+- *For Session* — in-process dict + `/tmp/claude-notch-session-{id}.json` (hook reads it on restart)
 - *Permanently* — atomic write to `~/.claude/settings.json → permissions.allow`
 
-## How the hook works
-
-`claude-notch-hook.py` is a synchronous `PreToolUse` hook. Claude Code calls it before every tool use and blocks on the response.
-
-1. App bundle gone → self-removes hook entry and exits
-2. Checks `permissions.allow` across all settings layers → fast exit if already allowed
-3. Checks session cache → fast exit if already approved this session
-4. Connects to the Unix socket; if app is not running, launches via `open -g` and polls (up to 3 s)
-5. Blocks waiting for UI response (up to 90 s)
-6. Timeout → allow
-
-## Requirements
-
-- macOS 14.0 (Sonoma) or later
-- MacBook with hardware notch
-- Python 3 (ships with macOS, used for the hook script)
-- Swift 5.10+ (build from source only)
+---
 
 ## Bundle identifier
 
