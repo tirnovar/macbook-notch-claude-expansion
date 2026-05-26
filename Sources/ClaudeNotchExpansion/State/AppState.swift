@@ -6,13 +6,15 @@ enum NotchExpansionState: Equatable {
     case horizontalBar
     case horizontalBarWithDetail
     case permissionCard(PendingPermission)
+    case questionCard(PendingQuestion)
 
     static func == (lhs: NotchExpansionState, rhs: NotchExpansionState) -> Bool {
         switch (lhs, rhs) {
-        case (.collapsed, .collapsed):                           return true
-        case (.horizontalBar, .horizontalBar):                   return true
+        case (.collapsed, .collapsed):                             return true
+        case (.horizontalBar, .horizontalBar):                     return true
         case (.horizontalBarWithDetail, .horizontalBarWithDetail): return true
-        case (.permissionCard(let l), .permissionCard(let r)):   return l == r
+        case (.permissionCard(let l), .permissionCard(let r)):     return l == r
+        case (.questionCard(let l),   .questionCard(let r)):       return l == r
         default: return false
         }
     }
@@ -24,6 +26,7 @@ final class AppState: ObservableObject {
 
     @Published var sessions: [ClaudeSession] = []
     @Published var pendingPermissions: [PendingPermission] = []
+    @Published var pendingQuestions: [PendingQuestion] = []
     @Published var notchExpansionState: NotchExpansionState = .collapsed
     @Published private(set) var isDetailOpen = false
     @Published var usage: ClaudeUsage?
@@ -53,6 +56,18 @@ final class AppState: ObservableObject {
 
     func removePermission(id: String) {
         pendingPermissions.removeAll { $0.id == id }
+        recalcState()
+    }
+
+    // MARK: - Question updates
+
+    func addQuestion(_ question: PendingQuestion) {
+        pendingQuestions.append(question)
+        recalcState()
+    }
+
+    func removeQuestion(id: String) {
+        pendingQuestions.removeAll { $0.id == id }
         recalcState()
     }
 
@@ -95,6 +110,9 @@ final class AppState: ObservableObject {
         if let top = pendingPermissions.first {
             isDetailOpen = false
             notchExpansionState = .permissionCard(top)
+        } else if let top = pendingQuestions.first {
+            isDetailOpen = false
+            notchExpansionState = .questionCard(top)
         } else if sessions.contains(where: { !$0.isTerminated }) {
             notchExpansionState = isDetailOpen ? .horizontalBarWithDetail : .horizontalBar
         } else {

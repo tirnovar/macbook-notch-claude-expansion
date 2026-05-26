@@ -18,6 +18,22 @@ SOCKET_PATH = "/tmp/claude-notch-monitor.sock"
 CONFIG_PATH  = "/tmp/claude-notch-config.json"
 CONNECT_TIMEOUT = 2.0   # seconds to wait for the app to accept connection
 
+# Tools that Claude uses internally and that never need user approval.
+PASSTHROUGH_TOOLS = {
+    "ToolSearch",
+    "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "TaskOutput", "TaskStop",
+    "Skill",
+    "ScheduleWakeup",
+    "CronCreate", "CronDelete", "CronList",
+    "Monitor",
+    "EnterPlanMode", "ExitPlanMode",
+    "EnterWorktree", "ExitWorktree",
+    "ListMcpResourcesTool", "ReadMcpResourceTool",
+    "ShareOnboardingGuide",
+    "RemoteTrigger",
+    "PushNotification",
+}
+
 def _load_response_timeout():
     try:
         with open(CONFIG_PATH) as f:
@@ -151,6 +167,79 @@ def _output_deny(reason="Permission denied"):
     sys.exit(2)
 
 
+# MARK: - AskUserQuestion support
+
+def _connect_to_notch():
+    """Open a connected socket to the notch app, or return None."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.settimeout(CONNECT_TIMEOUT)
+        sock.connect(SOCKET_PATH)
+        return sock
+    except (FileNotFoundError, ConnectionRefusedError, OSError):
+        sock.close()
+        if _try_launch_app():
+            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                sock.settimeout(CONNECT_TIMEOUT)
+                sock.connect(SOCKET_PATH)
+                return sock
+            except (FileNotFoundError, ConnectionRefusedError, OSError):
+                sock.close()
+    return None
+
+
+def _handle_ask_user_question(tool_input, session_id):
+    """Forward the question to the notch app and respond with the user's answer."""
+    questions = tool_input.get("questions", [])
+    if not questions:
+        _output_allow()
+        return
+
+    request_id = str(uuid.uuid4())
+    msg = {
+        "message_type": "question_request",
+        "request_id":   request_id,
+        "session_id":   session_id,
+        "pid":          os.getppid(),
+        "questions":    questions,
+        "timestamp":    time.time(),
+    }
+
+    sock = _connect_to_notch()
+    if sock is None:
+        _output_allow()  # app not running — fall back to built-in UI
+        return
+
+    try:
+        sock.settimeout(RESPONSE_TIMEOUT)
+        _write_framed(sock, msg)
+        response = _read_framed(sock)
+    except socket.timeout:
+        sock.close()
+        _output_allow()
+        return
+    except Exception:
+        sock.close()
+        _output_allow()
+        return
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+    answers = response.get("answers", {})
+    if not answers:
+        # User dismissed or timed out — let Claude Code show its own UI
+        _output_allow()
+        return
+
+    # Return the answers via deny reason; Claude reads this and continues.
+    reason = "User answered via Notch UI: " + json.dumps({"answers": answers})
+    _output_deny(reason)
+
+
 # MARK: - Auto-launch app when not running
 
 def _app_bundle_path():
@@ -228,7 +317,17 @@ def main():
     tool_input = hook_input.get("tool_input", {})
     cwd        = hook_input.get("cwd", "")
 
-    # 2. Fast-path checks — no socket needed
+    # 2a. Internal Claude tools that never need approval
+    if tool_name in PASSTHROUGH_TOOLS:
+        _output_allow()
+        return
+
+    # 2b. AskUserQuestion: show in notch, collect answer
+    if tool_name == "AskUserQuestion":
+        _handle_ask_user_question(tool_input, session_id)
+        return
+
+    # 2c. Fast-path checks — no socket needed
     tool_key = _make_tool_key(tool_name, tool_input)
     if _check_session_cache(session_id, tool_key):
         _output_allow()

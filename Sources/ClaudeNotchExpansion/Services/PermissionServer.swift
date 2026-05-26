@@ -2,6 +2,11 @@ import Foundation
 
 // MARK: - Wire types
 
+struct MessageTypePeek: Codable {
+    let messageType: String
+    enum CodingKeys: String, CodingKey { case messageType = "message_type" }
+}
+
 struct PermissionRequestMessage: Codable {
     let messageType: String
     let requestId: String
@@ -35,6 +40,34 @@ struct PermissionResponseMessage: Codable {
     }
 }
 
+struct QuestionRequestMessage: Codable {
+    let messageType: String
+    let requestId: String
+    let sessionId: String
+    let pid: Int
+    let questions: [QuestionItem]
+    let timestamp: Double
+
+    enum CodingKeys: String, CodingKey {
+        case messageType = "message_type"
+        case requestId   = "request_id"
+        case sessionId   = "session_id"
+        case pid, questions, timestamp
+    }
+}
+
+struct QuestionResponseMessage: Codable {
+    let messageType: String
+    let requestId: String
+    let answers: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case messageType = "message_type"
+        case requestId   = "request_id"
+        case answers
+    }
+}
+
 // MARK: - Server
 
 actor PermissionServer {
@@ -42,6 +75,7 @@ actor PermissionServer {
     static let socketPath = "/tmp/claude-notch-monitor.sock"
 
     private var pendingContinuations: [String: CheckedContinuation<PermissionResponseMessage, Error>] = [:]
+    private var pendingQuestionContinuations: [String: CheckedContinuation<QuestionResponseMessage, Error>] = [:]
 
     private init() {}
 
@@ -154,6 +188,69 @@ actor PermissionServer {
         pendingContinuations[id] = cont
     }
 
+    // MARK: - Question flow
+
+    func processQuestion(_ request: QuestionRequestMessage) async -> QuestionResponseMessage {
+        defer {
+            Task { @MainActor in AppState.shared.removeQuestion(id: request.requestId) }
+        }
+
+        await SessionMonitor.shared.markWaiting(
+            sessionId: request.sessionId,
+            requestId: request.requestId
+        )
+
+        let pending = PendingQuestion(
+            id: request.requestId,
+            sessionId: request.sessionId,
+            questions: request.questions,
+            receivedAt: Date()
+        )
+
+        await MainActor.run { AppState.shared.addQuestion(pending) }
+
+        let response: QuestionResponseMessage
+        do {
+            let reqId = request.requestId
+            response = try await withTimeout(seconds: Self.timeoutSeconds()) {
+                try await withCheckedThrowingContinuation { continuation in
+                    Task { await self.registerQuestionContinuation(id: reqId, cont: continuation) }
+                }
+            } fallback: {
+                QuestionResponseMessage(
+                    messageType: "question_response",
+                    requestId: request.requestId,
+                    answers: [:]
+                )
+            }
+        } catch {
+            response = QuestionResponseMessage(
+                messageType: "question_response",
+                requestId: request.requestId,
+                answers: [:]
+            )
+        }
+
+        await SessionMonitor.shared.markActive(sessionId: request.sessionId)
+        return response
+    }
+
+    private func registerQuestionContinuation(
+        id: String,
+        cont: CheckedContinuation<QuestionResponseMessage, Error>
+    ) {
+        pendingQuestionContinuations[id] = cont
+    }
+
+    func submitAnswer(requestId: String, answers: [String: String]) async {
+        guard let cont = pendingQuestionContinuations.removeValue(forKey: requestId) else { return }
+        cont.resume(returning: QuestionResponseMessage(
+            messageType: "question_response",
+            requestId: requestId,
+            answers: answers
+        ))
+    }
+
     // MARK: - Called by UI buttons
 
     func submitDecision(
@@ -237,28 +334,43 @@ private func socketAcceptLoop(server: PermissionServer) {
 private func handleConnection(clientFD: Int32, server: PermissionServer) {
     defer { close(clientFD) }
 
-    guard let request = try? readFramed(fd: clientFD, as: PermissionRequestMessage.self) else { return }
+    guard let data = try? readFramedData(fd: clientFD) else { return }
+    guard let peek = try? JSONDecoder().decode(MessageTypePeek.self, from: data) else { return }
 
-    // Bridge async actor decision → synchronous write
     let sema = DispatchSemaphore(value: 0)
-    var response: PermissionResponseMessage?
-
-    Task {
-        response = await server.processRequest(request)
-        sema.signal()
-    }
-
     let socketDeadline: DispatchTime = PermissionServer.timeoutSeconds() > 200
         ? .distantFuture
         : .now() + PermissionServer.timeoutSeconds() + 2
-    _ = sema.wait(timeout: socketDeadline)
 
-    if let response, let _ = try? writeFramed(fd: clientFD, message: response) { }
+    switch peek.messageType {
+    case "permission_request":
+        guard let request = try? JSONDecoder().decode(PermissionRequestMessage.self, from: data) else { return }
+        var response: PermissionResponseMessage?
+        Task {
+            response = await server.processRequest(request)
+            sema.signal()
+        }
+        _ = sema.wait(timeout: socketDeadline)
+        if let response, let _ = try? writeFramed(fd: clientFD, message: response) { }
+
+    case "question_request":
+        guard let request = try? JSONDecoder().decode(QuestionRequestMessage.self, from: data) else { return }
+        var response: QuestionResponseMessage?
+        Task {
+            response = await server.processQuestion(request)
+            sema.signal()
+        }
+        _ = sema.wait(timeout: socketDeadline)
+        if let response, let _ = try? writeFramed(fd: clientFD, message: response) { }
+
+    default:
+        break
+    }
 }
 
 // MARK: - Framing helpers (free functions — no actor involvement)
 
-private func readFramed<T: Decodable>(fd: Int32, as type: T.Type) throws -> T {
+private func readFramedData(fd: Int32) throws -> Data {
     var header = Data(count: 4)
     try header.withUnsafeMutableBytes { ptr in
         var received = 0
@@ -279,7 +391,7 @@ private func readFramed<T: Decodable>(fd: Int32, as type: T.Type) throws -> T {
             received += n
         }
     }
-    return try JSONDecoder().decode(T.self, from: body)
+    return body
 }
 
 @discardableResult

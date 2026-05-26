@@ -1,6 +1,12 @@
 import AppKit
 import SwiftUI
 
+// Borderless NSWindow subclass that can become key (needed for text field input).
+private final class KeyableWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+}
+
 final class NotchWindowController: NSObject {
     private var window: NSWindow!
 
@@ -8,8 +14,9 @@ final class NotchWindowController: NSObject {
     private let barNarrowW: CGFloat   = 320  // bar — 61pt gap each side clears ring+chevron
     private let barW: CGFloat         = 420  // expanded detail panel
     private let detailBelowH: CGFloat = 310
-    private let cardW: CGFloat       = 460
-    private let cardBelowH: CGFloat  = 224
+    private let cardW: CGFloat             = 460
+    private let cardBelowH: CGFloat        = 224
+    private let questionCardBelowH: CGFloat = 340
 
     private var globalClickMonitor: Any?
 
@@ -25,7 +32,7 @@ final class NotchWindowController: NSObject {
             .environmentObject(AppState.shared)
             .environment(\.notchHeight, notchAreaHeight)
 
-        window = NSWindow(
+        window = KeyableWindow(
             contentRect: notchFrame(),
             styleMask: [.borderless],
             backing: .buffered,
@@ -48,6 +55,7 @@ final class NotchWindowController: NSObject {
         case .horizontalBar:           window.setFrame(barFrame(), display: true)
         case .horizontalBarWithDetail: window.setFrame(barDetailFrame(), display: true)
         case .permissionCard:          window.setFrame(cardFrame(), display: true)
+        case .questionCard:            window.setFrame(questionCardFrame(), display: true)
         }
     }
 
@@ -73,6 +81,13 @@ final class NotchWindowController: NSObject {
             animate(to: cardFrame(), duration: 0.25)
             window.ignoresMouseEvents = false
             window.orderFrontRegardless()
+
+        case .questionCard:
+            stopOutsideClickMonitor()
+            animate(to: questionCardFrame(), duration: 0.25)
+            window.ignoresMouseEvents = false
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
         }
     }
 
@@ -105,6 +120,16 @@ final class NotchWindowController: NSObject {
             y: notchAreaY - cardBelowH,
             width: cardW,
             height: notchAreaHeight + cardBelowH
+        )
+    }
+
+    private func questionCardFrame() -> NSRect {
+        let s = screen.frame
+        return NSRect(
+            x: s.midX - cardW / 2,
+            y: notchAreaY - questionCardBelowH,
+            width: cardW,
+            height: notchAreaHeight + questionCardBelowH
         )
     }
 

@@ -6,6 +6,7 @@ extension Color {
     static let claudeAmber     = Color(red: 0.961, green: 0.620, blue: 0.043) // #F59E0B
     static let claudeGreen     = Color(red: 0.063, green: 0.722, blue: 0.506) // #10B981
     static let claudeRed       = Color(red: 0.937, green: 0.267, blue: 0.267) // #EF4444
+    static let claudeTeal      = Color(red: 0.047, green: 0.710, blue: 0.729) // #0CB5BA
     static let notchBG         = Color(red: 0.055, green: 0.055, blue: 0.055, opacity: 0.97)
 }
 
@@ -52,6 +53,13 @@ struct NotchContentView: View {
             VStack(spacing: 0) {
                 Color.clear.frame(height: notchHeight)
                 PermissionCardView(permission: permission)
+            }
+            .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
+
+        case .questionCard(let question):
+            VStack(spacing: 0) {
+                Color.clear.frame(height: notchHeight)
+                QuestionCardView(question: question)
             }
             .transition(.scale(scale: 0.9, anchor: .top).combined(with: .opacity))
         }
