@@ -15,7 +15,7 @@ final class NotchWindowController: NSObject {
     private let barW: CGFloat         = 420  // expanded detail panel
     private let detailBelowH: CGFloat = 310
     private let cardW: CGFloat             = 460
-    private let cardBelowH: CGFloat        = 224
+    private let cardBelowH: CGFloat        = 268
     private let questionCardBelowH: CGFloat = 340
 
     private var globalClickMonitor: Any?

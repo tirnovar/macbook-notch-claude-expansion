@@ -132,12 +132,26 @@ def _is_allowed_by_settings(tool_name, tool_input, cwd=""):
 
 # MARK: - Session cache
 
+def _tool_key_matches_wildcard(tool_key, pattern):
+    """Check if tool_key matches a wildcard pattern like 'Bash(cd:*)' against 'Bash(cd /path:*)'."""
+    if not pattern.endswith(":*)"):
+        return False
+    base = pattern[:-3]  # strip ":*)"
+    if not tool_key.startswith(base):
+        return False
+    remainder = tool_key[len(base):]
+    return remainder.startswith(" ") or remainder.startswith(":") or remainder.startswith(")")
+
+
 def _check_session_cache(session_id, tool_key):
     cache_path = f"/tmp/claude-notch-session-{session_id}.json"
     try:
         with open(cache_path) as f:
             data = json.load(f)
-        return tool_key in data.get("allowed_keys", [])
+        allowed_keys = data.get("allowed_keys", [])
+        if tool_key in allowed_keys:
+            return True
+        return any(_tool_key_matches_wildcard(tool_key, p) for p in allowed_keys)
     except (FileNotFoundError, json.JSONDecodeError, PermissionError):
         return False
 

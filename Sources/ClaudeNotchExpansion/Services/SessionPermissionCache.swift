@@ -8,7 +8,19 @@ actor SessionPermissionCache {
     private init() {}
 
     func isAllowed(sessionId: String, toolKey: String) -> Bool {
-        cache[sessionId]?.contains(toolKey) ?? false
+        guard let keys = cache[sessionId] else { return false }
+        return keys.contains { cached in
+            cached == toolKey || wildcardMatches(toolKey: toolKey, pattern: cached)
+        }
+    }
+
+    // "Bash(cd:*)" matches "Bash(cd /path:*)" — prefix must be followed by space, colon, or closing paren
+    private func wildcardMatches(toolKey: String, pattern: String) -> Bool {
+        guard pattern.hasSuffix(":*)") else { return false }
+        let base = String(pattern.dropLast(3))
+        guard toolKey.hasPrefix(base) else { return false }
+        let after = toolKey.dropFirst(base.count)
+        return after.hasPrefix(" ") || after.hasPrefix(":") || after.hasPrefix(")")
     }
 
     func addAllowance(sessionId: String, toolKey: String) {

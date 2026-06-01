@@ -3,7 +3,9 @@ import SwiftUI
 struct PermissionCardView: View {
     let permission: PendingPermission
     @EnvironmentObject var appState: AppState
+    @AppStorage("permissionTimeoutAction") private var timeoutAction: String = "wait"
     @State private var timeRemaining: Double = 90
+    @State private var didAutoDecide = false
 
     private let timer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
@@ -11,11 +13,12 @@ struct PermissionCardView: View {
         appState.sessions.first { $0.id == permission.sessionId }
     }
 
+    private var showTimer: Bool { timeoutAction != "wait" }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack(spacing: 8) {
-                // Session count indicator (mirrors the notch bar pill)
                 HStack(spacing: 4) {
                     Circle()
                         .fill(Color.claudeAmber)
@@ -75,7 +78,7 @@ struct PermissionCardView: View {
 
             Divider().overlay(Color.white.opacity(0.1))
 
-            // Action buttons
+            // Primary action buttons
             HStack(spacing: 8) {
                 PermissionButton(label: "Accept Once", style: .primary)   { decide(.allow, cacheAction: nil) }
                 PermissionButton(label: "For Session", style: .secondary) { decide(.allow, cacheAction: .session) }
@@ -83,21 +86,47 @@ struct PermissionCardView: View {
                 PermissionButton(label: "Decline",     style: .destructive) { decide(.deny, cacheAction: nil) }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.top, 10)
+            .padding(.bottom, permission.wildcardSessionKey != nil ? 6 : 10)
 
-            // Timeout progress bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.08))
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(timerColor)
-                        .frame(width: geo.size.width * CGFloat(timeRemaining / 90))
-                        .animation(.linear(duration: 0.5), value: timeRemaining)
+            // Wildcard session button — shown only for Bash commands with arguments
+            if let firstWord = permission.wildcardFirstWord {
+                Button {
+                    decideWildcard(firstWord: firstWord)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "asterisk")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Color.claudePurple.opacity(0.8))
+                        Text("Allow all \(firstWord) commands this session")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color.white.opacity(0.6))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.claudePurple.opacity(0.08)))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.claudePurple.opacity(0.18), lineWidth: 1))
                 }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
             }
-            .frame(height: 3)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+
+            // Timeout progress bar — only visible when auto-decision is configured
+            if showTimer {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.08))
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(timerColor)
+                            .frame(width: geo.size.width * CGFloat(timeRemaining / 90))
+                            .animation(.linear(duration: 0.5), value: timeRemaining)
+                    }
+                }
+                .frame(height: 3)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
@@ -114,6 +143,10 @@ struct PermissionCardView: View {
         .onReceive(timer) { _ in
             let elapsed = Date().timeIntervalSince(permission.receivedAt)
             timeRemaining = max(0, 90 - elapsed)
+            if timeRemaining <= 0, showTimer, !didAutoDecide {
+                didAutoDecide = true
+                decide(timeoutAction == "deny" ? .deny : .allow, cacheAction: nil)
+            }
         }
         .onAppear {
             let elapsed = Date().timeIntervalSince(permission.receivedAt)
@@ -137,6 +170,24 @@ struct PermissionCardView: View {
                 sessionId: p.sessionId,
                 toolName: p.toolName,
                 toolInput: p.toolInput
+            )
+        }
+        appState.removePermission(id: permission.id)
+        appState.updateSessionState(id: permission.sessionId, state: .active)
+    }
+
+    private func decideWildcard(firstWord: String) {
+        guard let wildcardKey = permission.wildcardSessionKey else { return }
+        let p = permission
+        Task {
+            await PermissionServer.shared.submitDecision(
+                requestId: p.id,
+                decision: .allow,
+                cacheAction: .session,
+                sessionId: p.sessionId,
+                toolName: p.toolName,
+                toolInput: p.toolInput,
+                overrideToolKey: wildcardKey
             )
         }
         appState.removePermission(id: permission.id)

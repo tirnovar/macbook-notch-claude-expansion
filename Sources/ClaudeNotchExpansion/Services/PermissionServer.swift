@@ -259,12 +259,13 @@ actor PermissionServer {
         cacheAction: CacheAction?,
         sessionId: String,
         toolName: String,
-        toolInput: [String: AnyCodable]
+        toolInput: [String: AnyCodable],
+        overrideToolKey: String? = nil
     ) async {
         guard let cont = pendingContinuations.removeValue(forKey: requestId) else { return }
 
         if let cacheAction {
-            let toolKey = makeToolKey(name: toolName, input: toolInput)
+            let toolKey = overrideToolKey ?? makeToolKey(name: toolName, input: toolInput)
             switch cacheAction {
             case .session:
                 await SessionPermissionCache.shared.addAllowance(

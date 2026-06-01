@@ -37,6 +37,23 @@ struct PendingPermission: Identifiable, Equatable {
         }
     }
 
+    // Returns a more permissive session-cache key using only the first word of the bash command.
+    // e.g. "Bash(cd /Users/foo:*)" → "Bash(cd:*)". nil when key would be identical (single-word cmd).
+    var wildcardSessionKey: String? {
+        guard toolName == "Bash" else { return nil }
+        let cmd = toolInput["command"]?.value as? String ?? ""
+        guard let firstWord = cmd.split(separator: " ").first.map(String.init) else { return nil }
+        let wildcardKey = "Bash(\(firstWord):*)"
+        let standardKey = makeToolKey(name: toolName, input: toolInput)
+        return wildcardKey != standardKey ? wildcardKey : nil
+    }
+
+    var wildcardFirstWord: String? {
+        guard wildcardSessionKey != nil else { return nil }
+        let cmd = toolInput["command"]?.value as? String ?? ""
+        return cmd.split(separator: " ").first.map(String.init)
+    }
+
     static func == (lhs: PendingPermission, rhs: PendingPermission) -> Bool {
         lhs.id == rhs.id
     }
