@@ -90,6 +90,17 @@ def _make_tool_key(tool_name, tool_input):
 
 # MARK: - Global permissions.allow check
 
+def _make_first_word_tool_key(tool_name, tool_input):
+    """Return a broader Bash key using only the first word, e.g. Bash(grep:*).
+    Allows patterns like Bash(grep:*) to cover any grep invocation."""
+    if tool_name != "Bash":
+        return None
+    command = tool_input.get("command", "")
+    parts = command.split()
+    first_word = parts[0] if parts else command
+    return f"Bash({first_word}:*)"
+
+
 def _glob_to_regex(pattern):
     """Convert a glob pattern (supporting ** and *) to a compiled regex."""
     parts = pattern.split('**')
@@ -120,10 +131,17 @@ def _is_allowed_by_settings(tool_name, tool_input, cwd=""):
         ]
 
     tool_key = _make_tool_key(tool_name, tool_input)
+    # Broader first-word key so Bash(grep:*) in settings covers grep -rn, grep -i, etc.
+    first_word_key = _make_first_word_tool_key(tool_name, tool_input)
+    keys_to_check = [tool_key]
+    if first_word_key and first_word_key != tool_key:
+        keys_to_check.append(first_word_key)
+
     for path in candidates:
         for pattern in _load_allow_patterns(path):
             try:
-                if _glob_to_regex(pattern).fullmatch(tool_key):
+                regex = _glob_to_regex(pattern)
+                if any(regex.fullmatch(k) for k in keys_to_check):
                     return True
             except re.error:
                 continue
