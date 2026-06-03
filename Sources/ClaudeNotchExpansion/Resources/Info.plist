@@ -9,9 +9,9 @@
     <key>CFBundleDisplayName</key>
     <string>Claude Notch</string>
     <key>CFBundleVersion</key>
-    <string>12</string>
+    <string>13</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.3.2</string>
+    <string>1.4.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>

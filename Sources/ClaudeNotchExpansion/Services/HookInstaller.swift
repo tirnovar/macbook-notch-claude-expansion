@@ -17,7 +17,7 @@ final class HookInstaller {
 
     func installIfNeeded() throws {
         try installHook()
-        installLaunchAgent()
+        removeLaunchAgentIfPresent()
     }
 
     // MARK: - Hook
@@ -115,44 +115,18 @@ final class HookInstaller {
         return root
     }
 
-    // MARK: - LaunchAgent
+    // MARK: - LaunchAgent removal (cleanup for users upgrading from auto-launch versions)
 
-    private func installLaunchAgent() {
-        guard let appPath = Bundle.main.bundlePath as String? else { return }
+    private func removeLaunchAgentIfPresent() {
+        guard FileManager.default.fileExists(atPath: launchAgentURL.path) else { return }
 
-        let plist: [String: Any] = [
-            "Label": bundleID,
-            "ProgramArguments": ["\(appPath)/Contents/MacOS/ClaudeNotchExpansion"],
-            "RunAtLoad": true,
-            "KeepAlive": true
-        ]
-
-        guard let data = try? PropertyListSerialization.data(
-            fromPropertyList: plist, format: .xml, options: 0
-        ) else { return }
-
-        try? FileManager.default.createDirectory(
-            at: launchAgentURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-
-        // Always write — handles both first install and path/config updates
-        let existing = try? Data(contentsOf: launchAgentURL)
-        guard data != existing else { return }
-
-        try? data.write(to: launchAgentURL, options: .atomic)
-
-        // Reload: bootout (ignore error if not loaded), then bootstrap
         let bootout = Process()
         bootout.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         bootout.arguments = ["bootout", "gui/\(getuid())/\(bundleID)"]
         try? bootout.run()
         bootout.waitUntilExit()
 
-        let bootstrap = Process()
-        bootstrap.executableURL = URL(fileURLWithPath: "/bin/launchctl")
-        bootstrap.arguments = ["bootstrap", "gui/\(getuid())", launchAgentURL.path]
-        try? bootstrap.run()
+        try? FileManager.default.removeItem(at: launchAgentURL)
     }
 
     // MARK: - Helpers
